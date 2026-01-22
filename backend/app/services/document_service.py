@@ -3,24 +3,21 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import Sequence
 from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
 from app.models.document import Document, DocumentSection
 from app.services.dependency_service import DependencyService
 from app.services.search_service import SearchService
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ParsedSection:
-
     title: str
     content: str
     start_line: int
@@ -113,13 +110,13 @@ class DocumentService:
         content: str,
         generate_embeddings: bool = True,
     ) -> Document:
-
         existing = await self.get_document_by_path(file_path)
         if existing:
             return await self.update_document(file_path, content, generate_embeddings)
 
         parsed_sections = self.parse_sections(content)
         title = self._extract_title(parsed_sections, file_path)
+        
         doc = Document(
             file_path=file_path,
             title=title,
@@ -172,7 +169,9 @@ class DocumentService:
             try:
                 await self.dependency_service.parse_and_store_dependencies(section)
             except Exception as e:
-                logger.warning(f"Failed to build dependencies for section {section.id}: {e}")
+                logger.warning(
+                    f"Failed to build dependencies for section {section.id}: {e}"
+                )
         await self.db.commit()
 
     async def update_document(
@@ -181,6 +180,7 @@ class DocumentService:
         content: str,
         generate_embeddings: bool = True,
     ) -> Document:
+
         doc = await self.get_document_by_path(file_path)
         if not doc:
             return await self.create_document(file_path, content, generate_embeddings)
@@ -189,7 +189,7 @@ class DocumentService:
         if doc.checksum == new_checksum:
             logger.debug(f"Document '{file_path}' unchanged, skipping update")
             return doc
-
+        
         await self.search_service.delete_by_document(str(doc.id))
         for section in doc.sections:
             await self.db.delete(section)
@@ -231,7 +231,9 @@ class DocumentService:
         await self.db.commit()
         await self._build_section_dependencies(doc)
 
-        logger.info(f"Updated document '{file_path}' with {len(parsed_sections)} sections")
+        logger.info(
+            f"Updated document '{file_path}' with {len(parsed_sections)} sections"
+        )
         return doc
 
     async def get_document(self, document_id: UUID) -> Document | None:
@@ -243,6 +245,7 @@ class DocumentService:
         return result.scalar_one_or_none()
 
     async def get_document_by_path(self, file_path: str) -> Document | None:
+
         result = await self.db.execute(
             select(Document)
             .options(selectinload(Document.sections))
@@ -254,7 +257,8 @@ class DocumentService:
         self,
         skip: int = 0,
         limit: int = 100,
-    ) -> list[Document]:
+    ) -> Sequence[Document]:
+
         result = await self.db.execute(
             select(Document)
             .options(selectinload(Document.sections))
@@ -262,9 +266,10 @@ class DocumentService:
             .offset(skip)
             .limit(limit)
         )
-        return list(result.scalars().all())
+        return result.scalars().all()
 
     async def delete_document(self, document_id: UUID) -> bool:
+
         doc = await self.get_document(document_id)
         if not doc:
             return False
@@ -289,11 +294,13 @@ class DocumentService:
         section_id: UUID,
         new_content: str,
     ) -> DocumentSection | None:
+ 
         section = await self.get_section(section_id)
         if not section:
             return None
 
         section.content = new_content
+
 
         if section.embedding_id:
             try:
@@ -302,7 +309,11 @@ class DocumentService:
                     content=new_content,
                     metadata={
                         "document_id": str(section.document_id),
-                        "file_path": section.document.file_path if section.document else None,
+                        "file_path": (
+                            section.document.file_path 
+                            if section.document 
+                            else None
+                        ),
                         "section_title": section.section_title,
                         "order": section.order,
                     },
@@ -318,6 +329,7 @@ class DocumentService:
         return section
 
     async def _rebuild_document_content(self, document_id: UUID) -> None:
+
         result = await self.db.execute(
             select(Document)
             .options(selectinload(Document.sections))

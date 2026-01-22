@@ -1,8 +1,9 @@
 from __future__ import annotations
 import logging
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 import chromadb
+from chromadb.api.models.Collection import Collection
 from chromadb.errors import ChromaError
 from openai import AsyncOpenAI
 from tenacity import (
@@ -18,25 +19,30 @@ logger = logging.getLogger(__name__)
 
 
 class SearchServiceError(Exception):
-    """Base exception for search service errors."""
+
+    pass
 
 
 class EmbeddingError(SearchServiceError):
-    """Error generating embeddings."""
+
+    pass
 
 
 class VectorStoreError(SearchServiceError):
-    """Error interacting with vector store."""
+
+    pass
 
 
 class SearchService:
+
     def __init__(self) -> None:
         self._openai = AsyncOpenAI(api_key=settings.openai_api_key)
         self._chroma: chromadb.HttpClient | None = None
-        self._collection: chromadb.Collection | None = None
+        self._collection: Collection | None = None
         self._initialized = False
 
     def _ensure_initialized(self) -> None:
+
         if self._initialized:
             return
 
@@ -76,7 +82,8 @@ class SearchService:
         texts: list[str],
         batch_size: int = 100,
     ) -> list[list[float]]:
-        embeddings = []
+        """Generate embeddings for multiple texts in batches."""
+        embeddings: list[list[float]] = []
         for i in range(0, len(texts), batch_size):
             batch = [t[:8000] for t in texts[i : i + batch_size]]
             response = await self._openai.embeddings.create(
@@ -92,12 +99,15 @@ class SearchService:
         content: str,
         metadata: dict[str, Any] | None = None,
     ) -> str:
+
         self._ensure_initialized()
+        if self._collection is None:
+            raise VectorStoreError("Collection not initialized")
 
         section_id_str = str(section_id)
         embedding = await self._get_embedding(content)
 
-        clean_meta = {}
+        clean_meta: dict[str, str | int | float | bool] = {}
         if metadata:
             for k, v in metadata.items():
                 if isinstance(v, (str, int, float, bool)):
@@ -121,8 +131,10 @@ class SearchService:
         self,
         sections: list[dict[str, Any]],
     ) -> int:
-        
+
         self._ensure_initialized()
+        if self._collection is None:
+            raise VectorStoreError("Collection not initialized")
 
         if not sections:
             return 0
@@ -131,10 +143,10 @@ class SearchService:
         contents = [s["content"] for s in sections]
         embeddings = await self._get_embeddings_batch(contents)
 
-        metadatas = []
+        metadatas: list[dict[str, str | int | float | bool]] = []
         for s in sections:
             meta = s.get("metadata", {})
-            clean = {
+            clean: dict[str, str | int | float | bool] = {
                 k: str(v) if not isinstance(v, (str, int, float, bool)) else v
                 for k, v in meta.items()
                 if v is not None
@@ -161,8 +173,9 @@ class SearchService:
         document_id_filter: str | None = None,
         min_score: float | None = None,
     ) -> list[dict[str, Any]]:
-        """Search for sections matching a query."""
         self._ensure_initialized()
+        if self._collection is None:
+            raise VectorStoreError("Collection not initialized")
 
         query_embedding = await self._get_embedding(query)
         where = self._build_where_clause(file_path_filter, document_id_filter)
@@ -183,8 +196,9 @@ class SearchService:
         self,
         file_path_filter: str | None,
         document_id_filter: str | None,
-    ) -> dict | None:
-        clauses = []
+    ) -> dict[str, Any] | None:
+        clauses: list[dict[str, Any]] = []
+        
         if file_path_filter:
             clauses.append({"file_path": {"$contains": file_path_filter}})
         if document_id_filter:
@@ -198,25 +212,30 @@ class SearchService:
 
     def _format_results(
         self,
-        results: dict,
+        results: dict[str, Any],
         min_score: float | None,
     ) -> list[dict[str, Any]]:
-        formatted = []
+        formatted: list[dict[str, Any]] = []
 
-        if not results["ids"] or not results["ids"][0]:
+        if not results.get("ids") or not results["ids"][0]:
             return formatted
 
-        for i, section_id in enumerate(results["ids"][0]):
-            distance = results["distances"][0][i] if results["distances"] else 0
-            score = 1 - distance  # Convert distance to similarity
+        ids: list[str] = results["ids"][0]
+        documents: list[str] | None = results.get("documents", [[]])[0] if results.get("documents") else None
+        metadatas: list[dict[str, Any]] | None = results.get("metadatas", [[]])[0] if results.get("metadatas") else None
+        distances: list[float] | None = results.get("distances", [[]])[0] if results.get("distances") else None
 
-            if min_score and score < min_score:
+        for i, section_id in enumerate(ids):
+            distance = distances[i] if distances else 0.0
+            score = 1.0 - distance  # Convert distance to similarity
+
+            if min_score is not None and score < min_score:
                 continue
 
             formatted.append({
                 "section_id": section_id,
-                "content": results["documents"][0][i] if results["documents"] else None,
-                "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
+                "content": documents[i] if documents else None,
+                "metadata": metadatas[i] if metadatas else {},
                 "score": round(score, 4),
             })
 
@@ -225,6 +244,8 @@ class SearchService:
 
     async def delete_section(self, section_id: str | UUID) -> bool:
         self._ensure_initialized()
+        if self._collection is None:
+            raise VectorStoreError("Collection not initialized")
 
         try:
             self._collection.delete(ids=[str(section_id)])
@@ -235,7 +256,10 @@ class SearchService:
             return False
 
     async def delete_by_document(self, document_id: str | UUID) -> int:
+
         self._ensure_initialized()
+        if self._collection is None:
+            raise VectorStoreError("Collection not initialized")
 
         try:
             results = self._collection.get(
@@ -245,8 +269,9 @@ class SearchService:
 
             if results["ids"]:
                 self._collection.delete(ids=results["ids"])
-                logger.info(f"Deleted {len(results['ids'])} sections for document {document_id}")
-                return len(results["ids"])
+                count = len(results["ids"])
+                logger.info(f"Deleted {count} sections for document {document_id}")
+                return count
             return 0
         except ChromaError as e:
             logger.error(f"Failed to delete document sections: {e}")
@@ -255,6 +280,13 @@ class SearchService:
     def get_collection_stats(self) -> dict[str, Any]:
         try:
             self._ensure_initialized()
+            if self._collection is None:
+                return {
+                    "name": settings.chroma_collection_name,
+                    "count": 0,
+                    "initialized": False,
+                }
+            
             return {
                 "name": settings.chroma_collection_name,
                 "count": self._collection.count(),
@@ -269,6 +301,8 @@ class SearchService:
 
     def clear_collection(self) -> None:
         self._ensure_initialized()
+        if self._collection is None:
+            raise VectorStoreError("Collection not initialized")
 
         results = self._collection.get(include=[])
         if results["ids"]:
@@ -278,10 +312,23 @@ class SearchService:
     async def initialize(self) -> None:
         self._ensure_initialized()
 
+    async def search_by_file_path(
+        self,
+        path_pattern: str,
+        n_results: int = 20
+    ) -> list[dict[str, Any]]:
+
+        return await self.search(
+            query=path_pattern,
+            n_results=n_results,
+            file_path_filter=path_pattern,
+        )
+
     async def close(self) -> None:
         self._initialized = False
         self._chroma = None
         self._collection = None
+
 
 
 search_service = SearchService()

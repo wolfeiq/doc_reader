@@ -6,7 +6,6 @@ from app.models.suggestion import SuggestionStatus
 
 
 class SuggestionBase(BaseModel):
-
     original_text: str
     suggested_text: str
     reasoning: str
@@ -14,19 +13,16 @@ class SuggestionBase(BaseModel):
 
 
 class SuggestionCreate(SuggestionBase):
-
     query_id: UUID
     section_id: UUID
 
 
 class SuggestionUpdate(BaseModel):
-
     status: Optional[SuggestionStatus] = None
     edited_text: Optional[str] = None
 
 
 class SuggestionResponse(SuggestionBase):
-
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -42,12 +38,18 @@ class SuggestionResponse(SuggestionBase):
 
 class SuggestionWithContext(SuggestionResponse):
     full_section_content: str = ""
-    
-    affected_sections: list[dict] = []
+    affected_sections: list[dict] = Field(default_factory=list)
 
 
 class SuggestionApplyRequest(BaseModel):
     use_edited_text: bool = False
+
+
+class SuggestionActionResponse(BaseModel):
+    success: bool
+    suggestion_id: UUID
+    section_id: Optional[UUID] = None
+    message: str
 
 
 class SuggestionApplyResponse(BaseModel):
@@ -58,6 +60,5 @@ class SuggestionApplyResponse(BaseModel):
 
 
 class BulkSuggestionUpdate(BaseModel):
-
     suggestion_ids: list[UUID]
     status: SuggestionStatus

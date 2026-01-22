@@ -12,7 +12,6 @@ class HistoryBase(BaseModel):
 
 
 class HistoryCreate(HistoryBase):
-
     document_id: UUID
     section_id: Optional[UUID] = None
     suggestion_id: Optional[UUID] = None
@@ -22,7 +21,6 @@ class HistoryCreate(HistoryBase):
 
 
 class HistoryResponse(HistoryBase):
-
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -44,9 +42,14 @@ class HistoryListResponse(BaseModel):
 
 
 class HistoryFilter(BaseModel):
-
     document_id: Optional[UUID] = None
     section_id: Optional[UUID] = None
     user_action: Optional[UserAction] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+
+
+class HistoryStatsResponse(BaseModel):
+    by_action: dict[str, int]
+    total: int
+    last_7_days: int

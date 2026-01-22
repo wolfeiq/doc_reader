@@ -9,7 +9,13 @@ from sse_starlette.sse import EventSourceResponse
 from app.api.deps import get_db
 from app.models.query import Query, QueryStatus
 from app.models.suggestion import EditSuggestion
-from app.schemas.query import QueryCreate, QueryResponse, QueryDetailResponse
+from app.schemas.query import (
+    QueryCreate, 
+    QueryResponse, 
+    QueryDetailResponse,
+    QuerySuggestionListItem,
+    QueryProcessResponse,
+)
 from app.ai.orchestrator import process_query
 from app.api.utils import get_query_or_404
 
@@ -21,8 +27,7 @@ router = APIRouter(prefix="/queries", tags=["queries"])
 async def create_query(
     query_in: QueryCreate,
     db: AsyncSession = Depends(get_db)
-):
-
+) -> QueryResponse:
     query = Query(
         query_text=query_in.query_text,
         status=QueryStatus.PENDING,
@@ -33,7 +38,18 @@ async def create_query(
     await db.refresh(query)
     
     logger.info(f"Created query {query.id}: {query_in.query_text[:50]}...")
-    return query
+    
+    return QueryResponse(
+        id=query.id,
+        query_text=query.query_text,
+        status=query.status,
+        status_message=query.status_message,
+        completed_at=query.completed_at,
+        error_message=query.error_message,
+        created_at=query.created_at,
+        updated_at=query.updated_at,
+        suggestion_count=0,
+    )
 
 
 @router.get("/", response_model=list[QueryResponse])
@@ -42,8 +58,7 @@ async def list_queries(
     limit: int = 50,
     status: QueryStatus | None = None,
     db: AsyncSession = Depends(get_db)
-):
-
+) -> list[QueryResponse]:
     stmt = select(Query).order_by(Query.created_at.desc())
     
     if status:
@@ -53,36 +68,65 @@ async def list_queries(
     result = await db.execute(stmt)
     queries = result.scalars().all()
     
+
+    responses: list[QueryResponse] = []
     for query in queries:
         count_result = await db.execute(
             select(func.count(EditSuggestion.id))
             .where(EditSuggestion.query_id == query.id)
         )
-        query.suggestion_count = count_result.scalar() or 0
+        suggestion_count = count_result.scalar() or 0
+        
+        responses.append(
+            QueryResponse(
+                id=query.id,
+                query_text=query.query_text,
+                status=query.status,
+                status_message=query.status_message,
+                completed_at=query.completed_at,
+                error_message=query.error_message,
+                created_at=query.created_at,
+                updated_at=query.updated_at,
+                suggestion_count=suggestion_count,
+            )
+        )
     
-    return queries
+    return responses
 
 
 @router.get("/{query_id}", response_model=QueryDetailResponse)
 async def get_query(
     query_id: UUID,
     db: AsyncSession = Depends(get_db)
-):
+) -> QueryDetailResponse:
     query = await get_query_or_404(
         db,
         query_id,
         options=[selectinload(Query.suggestions)]
     )
-    query.suggestion_count = len(query.suggestions)
-    return query
+    
+    return QueryDetailResponse(
+        id=query.id,
+        query_text=query.query_text,
+        status=query.status,
+        status_message=query.status_message,
+        completed_at=query.completed_at,
+        error_message=query.error_message,
+        created_at=query.created_at,
+        updated_at=query.updated_at,
+        suggestion_count=len(query.suggestions),
+        suggestions=[
+            # Convert to SuggestionResponse
+            suggestion for suggestion in query.suggestions
+        ]
+    )
 
 
-@router.get("/{query_id}/suggestions")
+@router.get("/{query_id}/suggestions", response_model=list[QuerySuggestionListItem])
 async def get_query_suggestions(
     query_id: UUID,
     db: AsyncSession = Depends(get_db)
-):
-
+) -> list[QuerySuggestionListItem]:
     await get_query_or_404(db, query_id)
     
     result = await db.execute(
@@ -94,17 +138,17 @@ async def get_query_suggestions(
     suggestions = result.scalars().all()
     
     return [
-        {
-            "id": str(s.id),
-            "section_id": str(s.section_id),
-            "section_title": s.section.section_title if s.section else None,
-            "original_text": s.original_text,
-            "suggested_text": s.suggested_text,
-            "reasoning": s.reasoning,
-            "confidence": s.confidence,
-            "status": s.status.value,
-            "created_at": s.created_at.isoformat()
-        }
+        QuerySuggestionListItem(
+            id=s.id,
+            section_id=s.section_id,
+            section_title=s.section.section_title if s.section else None,
+            original_text=s.original_text,
+            suggested_text=s.suggested_text,
+            reasoning=s.reasoning,
+            confidence=s.confidence,
+            status=s.status.value,
+            created_at=s.created_at
+        )
         for s in suggestions
     ]
 
@@ -113,8 +157,7 @@ async def get_query_suggestions(
 async def process_query_stream(
     query_id: UUID,
     db: AsyncSession = Depends(get_db)
-):
-
+) -> EventSourceResponse:
     query = await get_query_or_404(db, query_id)
     
     if query.status not in (QueryStatus.PENDING, QueryStatus.FAILED):
@@ -133,14 +176,12 @@ async def process_query_stream(
     return EventSourceResponse(event_generator())
 
 
-
-# should be a background task with Celery
-@router.post("/{query_id}/process/sync")
+@router.post("/{query_id}/process/sync", response_model=QueryProcessResponse)
 async def process_query_sync(
     query_id: UUID,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
-):
+) -> QueryProcessResponse:
     query = await get_query_or_404(db, query_id)
     
     if query.status not in (QueryStatus.PENDING, QueryStatus.FAILED):
@@ -149,20 +190,23 @@ async def process_query_sync(
             detail=f"Query already {query.status.value}"
         )
     
-    async def run_processing():
+    async def run_processing() -> None:
         async for _ in process_query(query_id, query.query_text, db):
             pass  # Consume all events
     
     background_tasks.add_task(run_processing)
     
-    return {"message": "Processing started", "query_id": str(query_id)}
+    return QueryProcessResponse(
+        message="Processing started",
+        query_id=query_id
+    )
 
 
 @router.delete("/{query_id}", status_code=204)
 async def delete_query(
     query_id: UUID,
     db: AsyncSession = Depends(get_db)
-):
+) -> None:
 
     query = await get_query_or_404(db, query_id)
     await db.delete(query)

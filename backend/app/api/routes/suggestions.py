@@ -9,7 +9,11 @@ from app.models.suggestion import EditSuggestion, SuggestionStatus
 from app.models.history import EditHistory, UserAction
 from app.models.document import DocumentSection
 from app.services.document_service import DocumentService
-from app.schemas.suggestion import SuggestionResponse, SuggestionUpdate
+from app.schemas.suggestion import (
+    SuggestionResponse, 
+    SuggestionUpdate,
+    SuggestionActionResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/suggestions", tags=["suggestions"])
@@ -19,13 +23,32 @@ router = APIRouter(prefix="/suggestions", tags=["suggestions"])
 async def get_suggestion(
     suggestion_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> SuggestionResponse:
+
     suggestion = await get_suggestion_or_404(
         db,
         suggestion_id,
         options=[selectinload(EditSuggestion.section)],
     )
-    return suggestion
+    return SuggestionResponse(
+        id=suggestion.id,
+        query_id=suggestion.query_id,
+        section_id=suggestion.section_id,
+        original_text=suggestion.original_text,
+        suggested_text=suggestion.suggested_text,
+        reasoning=suggestion.reasoning,
+        confidence=suggestion.confidence,
+        status=suggestion.status,
+        edited_text=suggestion.edited_text,
+        created_at=suggestion.created_at,
+        updated_at=suggestion.updated_at,
+        section_title=suggestion.section.section_title if suggestion.section else None,
+        file_path=(
+            suggestion.section.document.file_path 
+            if suggestion.section and suggestion.section.document 
+            else None
+        ),
+    )
 
 
 @router.patch("/{suggestion_id}", response_model=SuggestionResponse)
@@ -33,14 +56,14 @@ async def update_suggestion(
     suggestion_id: UUID,
     update: SuggestionUpdate,
     db: AsyncSession = Depends(get_db)
-):
+) -> SuggestionResponse:
     suggestion = await get_suggestion_or_404(
         db,
         suggestion_id,
         options=[selectinload(EditSuggestion.section)],
     )
 
-    if update.status:
+    if update.status is not None:
         suggestion.status = update.status
     if update.edited_text is not None:
         suggestion.edited_text = update.edited_text
@@ -48,14 +71,32 @@ async def update_suggestion(
     await db.commit()
     await db.refresh(suggestion)
 
-    return suggestion
+    return SuggestionResponse(
+        id=suggestion.id,
+        query_id=suggestion.query_id,
+        section_id=suggestion.section_id,
+        original_text=suggestion.original_text,
+        suggested_text=suggestion.suggested_text,
+        reasoning=suggestion.reasoning,
+        confidence=suggestion.confidence,
+        status=suggestion.status,
+        edited_text=suggestion.edited_text,
+        created_at=suggestion.created_at,
+        updated_at=suggestion.updated_at,
+        section_title=suggestion.section.section_title if suggestion.section else None,
+        file_path=(
+            suggestion.section.document.file_path 
+            if suggestion.section and suggestion.section.document 
+            else None
+        ),
+    )
 
 
-@router.post("/{suggestion_id}/accept", response_model=dict)
+@router.post("/{suggestion_id}/accept", response_model=SuggestionActionResponse)
 async def accept_suggestion(
     suggestion_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> SuggestionActionResponse:
     suggestion = await get_suggestion_or_404(
         db,
         suggestion_id,
@@ -90,7 +131,7 @@ async def accept_suggestion(
         new_content=new_content,
         user_action=UserAction.ACCEPTED,
         query_text=suggestion.query.query_text if suggestion.query else None,
-        file_path=suggestion.section.document.file_path,
+        file_path=suggestion.section.document.file_path if suggestion.section.document else None,
         section_title=suggestion.section.section_title
     )
     db.add(history)
@@ -98,24 +139,24 @@ async def accept_suggestion(
 
     logger.info(f"Applied suggestion {suggestion_id}")
 
-    return {
-        "success": True,
-        "suggestion_id": str(suggestion_id),
-        "section_id": str(suggestion.section_id),
-        "message": "Suggestion applied successfully"
-    }
+    return SuggestionActionResponse(
+        success=True,
+        suggestion_id=suggestion_id,
+        section_id=suggestion.section_id,
+        message="Suggestion applied successfully"
+    )
 
 
-@router.post("/{suggestion_id}/reject", response_model=dict)
+@router.post("/{suggestion_id}/reject", response_model=SuggestionActionResponse)
 async def reject_suggestion(
     suggestion_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> SuggestionActionResponse:
     suggestion = await get_suggestion_or_404(
         db,
         suggestion_id,
         options=[
-            selectinload(EditSuggestion.section),
+            selectinload(EditSuggestion.section).selectinload(DocumentSection.document),
             selectinload(EditSuggestion.query),
         ],
     )
@@ -136,7 +177,11 @@ async def reject_suggestion(
         new_content=suggestion.original_text,  # No change
         user_action=UserAction.REJECTED,
         query_text=suggestion.query.query_text if suggestion.query else None,
-        file_path=suggestion.section.document.file_path if suggestion.section and suggestion.section.document else None,
+        file_path=(
+            suggestion.section.document.file_path 
+            if suggestion.section and suggestion.section.document 
+            else None
+        ),
         section_title=suggestion.section.section_title if suggestion.section else None
     )
     db.add(history)
@@ -144,16 +189,17 @@ async def reject_suggestion(
 
     logger.info(f"Rejected suggestion {suggestion_id}")
 
-    return {
-        "success": True,
-        "suggestion_id": str(suggestion_id),
-        "message": "Suggestion rejected"
-    }
+    return SuggestionActionResponse(
+        success=True,
+        suggestion_id=suggestion_id,
+        section_id=suggestion.section_id,
+        message="Suggestion rejected"
+    )
 
 
-@router.post("/{suggestion_id}/apply", response_model=dict)
+@router.post("/{suggestion_id}/apply", response_model=SuggestionActionResponse)
 async def apply_suggestion(
     suggestion_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> SuggestionActionResponse:
     return await accept_suggestion(suggestion_id, db)

@@ -1,9 +1,18 @@
-"""OpenAI function calling tools for the documentation update agent."""
+from typing import Any, TypedDict, NotRequired
 
-from typing import Any
 
-# Tool definitions for OpenAI function calling
-TOOLS = [
+class ToolFunction(TypedDict):
+    name: str
+    description: str
+    parameters: dict[str, Any]
+
+
+class Tool(TypedDict):
+    type: str
+    function: ToolFunction
+
+
+TOOLS: list[Tool] = [
     {
         "type": "function",
         "function": {
@@ -139,12 +148,10 @@ TOOLS = [
 
 
 def get_tool_names() -> list[str]:
-    """Get list of available tool names."""
     return [tool["function"]["name"] for tool in TOOLS]
 
 
-def get_tool_by_name(name: str) -> dict | None:
-    """Get a specific tool definition by name."""
+def get_tool_by_name(name: str) -> Tool | None:
     for tool in TOOLS:
         if tool["function"]["name"] == name:
             return tool

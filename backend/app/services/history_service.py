@@ -1,25 +1,21 @@
-"""History service for tracking edits."""
-
 import logging
+from typing import Sequence
 from uuid import UUID
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.history import EditHistory, UserAction
 
 logger = logging.getLogger(__name__)
 
 
 class HistoryService:
-    """Service for managing edit history."""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
     async def create_entry(
         self,
-        document_id: UUID | None,
+        document_id: UUID,
         section_id: UUID | None,
         suggestion_id: UUID | None,
         old_content: str,
@@ -29,7 +25,7 @@ class HistoryService:
         file_path: str | None = None,
         section_title: str | None = None
     ) -> EditHistory:
-        """Create a history entry."""
+
         entry = EditHistory(
             document_id=document_id,
             section_id=section_id,
@@ -49,21 +45,24 @@ class HistoryService:
         self,
         document_id: UUID,
         limit: int = 50
-    ) -> list[EditHistory]:
-        """Get history for a document."""
+    ) -> Sequence[EditHistory]:
+
         result = await self.db.execute(
             select(EditHistory)
             .where(EditHistory.document_id == document_id)
             .order_by(EditHistory.created_at.desc())
             .limit(limit)
         )
-        return list(result.scalars().all())
+        return result.scalars().all()
 
-    async def get_section_history(self, section_id: UUID) -> list[EditHistory]:
-        """Get history for a section."""
+    async def get_section_history(
+        self, 
+        section_id: UUID
+    ) -> Sequence[EditHistory]:
+
         result = await self.db.execute(
             select(EditHistory)
             .where(EditHistory.section_id == section_id)
             .order_by(EditHistory.created_at.desc())
         )
-        return list(result.scalars().all())
+        return result.scalars().all()
