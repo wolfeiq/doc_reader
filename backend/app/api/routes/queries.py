@@ -1,20 +1,17 @@
-"""API routes for query management."""
-
 import json
 import logging
 from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sse_starlette.sse import EventSourceResponse
-
 from app.api.deps import get_db
 from app.models.query import Query, QueryStatus
 from app.models.suggestion import EditSuggestion
 from app.schemas.query import QueryCreate, QueryResponse, QueryDetailResponse
 from app.ai.orchestrator import process_query
+from app.api.utils import get_query_or_404
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/queries", tags=["queries"])
@@ -25,7 +22,7 @@ async def create_query(
     query_in: QueryCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    """Create a new query."""
+
     query = Query(
         query_text=query_in.query_text,
         status=QueryStatus.PENDING,
@@ -46,7 +43,7 @@ async def list_queries(
     status: QueryStatus | None = None,
     db: AsyncSession = Depends(get_db)
 ):
-    """List queries with optional status filter."""
+
     stmt = select(Query).order_by(Query.created_at.desc())
     
     if status:
@@ -56,7 +53,6 @@ async def list_queries(
     result = await db.execute(stmt)
     queries = result.scalars().all()
     
-    # Add suggestion counts
     for query in queries:
         count_result = await db.execute(
             select(func.count(EditSuggestion.id))
@@ -72,17 +68,11 @@ async def get_query(
     query_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):
-    """Get query details with suggestions."""
-    result = await db.execute(
-        select(Query)
-        .options(selectinload(Query.suggestions))
-        .where(Query.id == query_id)
+    query = await get_query_or_404(
+        db,
+        query_id,
+        options=[selectinload(Query.suggestions)]
     )
-    query = result.scalar_one_or_none()
-    
-    if not query:
-        raise HTTPException(status_code=404, detail="Query not found")
-    
     query.suggestion_count = len(query.suggestions)
     return query
 
@@ -92,11 +82,8 @@ async def get_query_suggestions(
     query_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all suggestions for a query."""
-    # Verify query exists
-    query_result = await db.execute(select(Query).where(Query.id == query_id))
-    if not query_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Query not found")
+
+    await get_query_or_404(db, query_id)
     
     result = await db.execute(
         select(EditSuggestion)
@@ -127,12 +114,8 @@ async def process_query_stream(
     query_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):
-    """Start processing a query and stream results via SSE."""
-    result = await db.execute(select(Query).where(Query.id == query_id))
-    query = result.scalar_one_or_none()
-    
-    if not query:
-        raise HTTPException(status_code=404, detail="Query not found")
+
+    query = await get_query_or_404(db, query_id)
     
     if query.status not in (QueryStatus.PENDING, QueryStatus.FAILED):
         raise HTTPException(
@@ -150,18 +133,15 @@ async def process_query_stream(
     return EventSourceResponse(event_generator())
 
 
+
+# should be a background task with Celery
 @router.post("/{query_id}/process/sync")
 async def process_query_sync(
     query_id: UUID,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
-    """Start processing a query in background (non-streaming)."""
-    result = await db.execute(select(Query).where(Query.id == query_id))
-    query = result.scalar_one_or_none()
-    
-    if not query:
-        raise HTTPException(status_code=404, detail="Query not found")
+    query = await get_query_or_404(db, query_id)
     
     if query.status not in (QueryStatus.PENDING, QueryStatus.FAILED):
         raise HTTPException(
@@ -183,12 +163,7 @@ async def delete_query(
     query_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a query and its suggestions."""
-    result = await db.execute(select(Query).where(Query.id == query_id))
-    query = result.scalar_one_or_none()
-    
-    if not query:
-        raise HTTPException(status_code=404, detail="Query not found")
-    
+
+    query = await get_query_or_404(db, query_id)
     await db.delete(query)
     await db.commit()

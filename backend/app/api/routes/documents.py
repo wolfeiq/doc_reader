@@ -2,11 +2,9 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 from uuid import UUID
+from backend.app.api.utils.helper import decode_upload_file, get_document_or_404, get_pending_suggestions_by_section, get_sections_or_404
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from app.api.deps import get_db
 from app.models.document import Document, DocumentSection
 from app.models.suggestion import EditSuggestion, SuggestionStatus
@@ -25,6 +23,7 @@ router = APIRouter()
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 
 
+
 @router.get("/", response_model=list[DocumentListResponse])
 async def list_documents(
     db: DBSession,
@@ -33,7 +32,6 @@ async def list_documents(
 ) -> list[DocumentListResponse]:
     service = DocumentService(db)
     docs = await service.list_documents(skip=skip, limit=limit)
-
     return [
         DocumentListResponse(
             id=doc.id,
@@ -49,97 +47,36 @@ async def list_documents(
 
 
 @router.post("/", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
-async def create_document(
-    doc_in: DocumentCreate,
-    db: DBSession,
-) -> Document:
+async def create_document(doc_in: DocumentCreate, db: DBSession) -> Document:
     service = DocumentService(db)
-    doc = await service.create_document(
-        file_path=doc_in.file_path,
-        content=doc_in.content,
-    )
+    doc = await service.create_document(file_path=doc_in.file_path, content=doc_in.content)
     await db.refresh(doc, ["sections"])
     return doc
 
 
-@router.post(
-    "/upload",
-    response_model=DocumentResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def upload_document(
-    db: DBSession,
-    file: UploadFile = File(...),
-) -> Document:
-
-    if not file.filename or not file.filename.endswith(".md"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only .md files are supported",
-        )
-
-    content = await file.read()
-
-    try:
-        content_str = content.decode("utf-8")
-    except UnicodeDecodeError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must be UTF-8 encoded",
-        )
-
+@router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+async def upload_document(db: DBSession, file: UploadFile = File(...)) -> Document:
+    content_str = await decode_upload_file(file)
     service = DocumentService(db)
-    doc = await service.create_document(
-        file_path=file.filename,
-        content=content_str,
-    )
+    doc = await service.create_document(file_path=file.filename, content=content_str)
     await db.refresh(doc, ["sections"])
     return doc
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
-async def get_document(
-    document_id: UUID,
-    db: DBSession,
-) -> Document:
+async def get_document(document_id: UUID, db: DBSession) -> Document:
     service = DocumentService(db)
     doc = await service.get_document(document_id)
-
     if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found",
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     return doc
 
 
 @router.get("/{document_id}/preview")
-async def preview_document(
-    document_id: UUID,
-    db: DBSession,
-) -> dict:
-    result = await db.execute(
-        select(Document)
-        .options(selectinload(Document.sections))
-        .where(Document.id == document_id)
-    )
-    doc = result.scalar_one_or_none()
-
-    if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found",
-        )
-
+async def preview_document(document_id: UUID, db: DBSession) -> dict:
+    doc = await get_document_or_404(db, document_id)
     section_ids = [s.id for s in doc.sections]
-    suggestions_result = await db.execute(
-        select(EditSuggestion).where(
-            EditSuggestion.section_id.in_(section_ids),
-            EditSuggestion.status == SuggestionStatus.PENDING,
-        )
-    )
-    pending_by_section = {s.section_id: s for s in suggestions_result.scalars()}
+    pending_by_section = await get_pending_suggestions_by_section(db, section_ids)
 
     preview_sections = []
     for section in sorted(doc.sections, key=lambda s: s.order):
@@ -148,11 +85,7 @@ async def preview_document(
             "section_id": str(section.id),
             "section_title": section.section_title,
             "original_content": section.content,
-            "preview_content": (
-                suggestion.edited_text or suggestion.suggested_text
-                if suggestion
-                else section.content
-            ),
+            "preview_content": suggestion.edited_text or suggestion.suggested_text if suggestion else section.content,
             "suggestion_id": str(suggestion.id) if suggestion else None,
             "confidence": suggestion.confidence if suggestion else None,
         })
@@ -168,27 +101,8 @@ async def preview_document(
 
 
 @router.get("/{document_id}/sections")
-async def get_document_sections(
-    document_id: UUID,
-    db: DBSession,
-) -> list[dict]:
-    result = await db.execute(
-        select(DocumentSection)
-        .where(DocumentSection.document_id == document_id)
-        .order_by(DocumentSection.order)
-    )
-    sections = result.scalars().all()
-
-    if not sections:
-        doc_exists = await db.scalar(
-            select(Document.id).where(Document.id == document_id)
-        )
-        if not doc_exists:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found",
-            )
-
+async def get_document_sections(document_id: UUID, db: DBSession) -> list[dict]:
+    sections = await get_sections_or_404(db, document_id)
     return [
         {
             "id": str(s.id),
@@ -203,48 +117,26 @@ async def get_document_sections(
 
 
 @router.get("/{document_id}/dependencies")
-async def get_document_dependencies(
-    document_id: UUID,
-    db: DBSession,
-) -> dict:
+async def get_document_dependencies(document_id: UUID, db: DBSession) -> dict:
     service = DependencyService(db)
+    # celery
     return await service.build_dependency_graph(document_id)
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_document(
-    document_id: UUID,
-    db: DBSession,
-) -> None:
+async def delete_document(document_id: UUID, db: DBSession) -> None:
     service = DocumentService(db)
     success = await service.delete_document(document_id)
-
     if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
 
 @router.post("/{document_id}/reindex")
-async def reindex_document(
-    document_id: UUID,
-    db: DBSession,
-) -> dict:
+async def reindex_document(document_id: UUID, db: DBSession) -> dict:
+    doc = await get_document_or_404(db, document_id)
     service = DocumentService(db)
-    doc = await service.get_document(document_id)
-
-    if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found",
-        )
-
-    updated_doc = await service.update_document(
-        file_path=doc.file_path,
-        content=doc.content,
-    )
-
+    # celery
+    updated_doc = await service.update_document(file_path=doc.file_path, content=doc.content)
     return {
         "success": True,
         "document_id": str(document_id),
