@@ -1,10 +1,9 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from backend.app.schemas.suggestion import SuggestionResponse
 from pydantic import BaseModel, ConfigDict, Field
 from app.models.query import QueryStatus
-
+from app.schemas.suggestion import SuggestionResponse
 
 class QueryCreate(BaseModel):
     query_text: str = Field(..., min_length=1, max_length=5000)
