@@ -1,9 +1,11 @@
+"""Enhanced search service with ChromaDB and metadata filtering."""
+
 import logging
-from typing import Optional
 from uuid import UUID
+
 import chromadb
-from chromadb.config import Settings as ChromaSettings
 from openai import AsyncOpenAI
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import settings
 
@@ -13,153 +15,151 @@ logger = logging.getLogger(__name__)
 class SearchService:
 
     def __init__(self):
-        self._client: Optional[chromadb.Client] = None
-        self._collection: Optional[chromadb.Collection] = None
-        self._openai: Optional[AsyncOpenAI] = None
+        self._openai = AsyncOpenAI(api_key=settings.openai_api_key)
+        self._chroma = chromadb.HttpClient(
+            host=settings.chroma_host,
+            port=settings.chroma_port
+        )
+        self._collection = self._chroma.get_or_create_collection(
+            name=settings.chroma_collection_name,
+            metadata={"hnsw:space": "cosine"}  # Use cosine similarity
+        )
 
-    async def initialize(self) -> None:
-        try: #railway
-            if settings.environment == "production":
-                self._client = chromadb.HttpClient(
-                    host=settings.chroma_host,
-                    port=settings.chroma_port,
-                )
-            else: #local
-                self._client = chromadb.PersistentClient(
-                    path="./chroma_data",
-                    settings=ChromaSettings(
-                        anonymized_telemetry=False,
-                        allow_reset=True,
-                    ),
-                )
-
-            self._collection = self._client.get_or_create_collection(
-                name=settings.chroma_collection_name,
-                metadata={"hnsw:space": "cosine"},
-            )
-
-            self._openai = AsyncOpenAI(api_key=settings.openai_api_key)
-
-            logger.info(
-                f"ChromaDB initialized. Collection '{settings.chroma_collection_name}' "
-                f"has {self._collection.count()} documents."
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to initialize ChromaDB: {e}")
-            raise
-
-    async def close(self) -> None:
-        pass
-
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
     async def _get_embedding(self, text: str) -> list[float]:
         response = await self._openai.embeddings.create(
             model=settings.openai_embedding_model,
-            input=text,
+            input=text
         )
         return response.data[0].embedding
 
     async def add_section(
         self,
-        section_id: UUID,
+        section_id: str,
         content: str,
-        metadata: dict,
+        metadata: dict | None = None
     ) -> str:
-        if not self._collection:
-            raise RuntimeError("SearchService not initialized")
-
+        
         embedding = await self._get_embedding(content)
-        doc_id = str(section_id)
+        meta = metadata or {}
 
+        clean_meta = {
+            k: str(v) if not isinstance(v, (str, int, float, bool)) else v
+            for k, v in meta.items()
+        }
+        
         self._collection.upsert(
-            ids=[doc_id],
+            ids=[section_id],
             embeddings=[embedding],
             documents=[content],
-            metadatas=[metadata],
+            metadatas=[clean_meta] if clean_meta else None
         )
-
-        logger.debug(f"Added section {section_id} to ChromaDB")
-        return doc_id
-
-    async def update_section(
-        self,
-        section_id: UUID,
-        content: str,
-        metadata: dict,
-    ) -> str:
-        return await self.add_section(section_id, content, metadata)
-
-    async def delete_section(self, section_id: UUID) -> None:
-        if not self._collection:
-            raise RuntimeError("SearchService not initialized")
-
-        doc_id = str(section_id)
-        try:
-            self._collection.delete(ids=[doc_id])
-            logger.debug(f"Deleted section {section_id} from ChromaDB")
-        except Exception as e:
-            logger.warning(f"Failed to delete section {section_id}: {e}")
+        
+        logger.info(f"Added section {section_id} to vector store")
+        return section_id
 
     async def search(
         self,
         query: str,
         n_results: int = 10,
-        filter_metadata: Optional[dict] = None,
+        file_path_filter: str | None = None,
+        document_id_filter: str | None = None,
+        min_score: float | None = None
     ) -> list[dict]:
-        if not self._collection:
-            raise RuntimeError("SearchService not initialized")
 
-        embedding = await self._get_embedding(query)
-
+        query_embedding = await self._get_embedding(query)
+        
+        where = None
+        where_clauses = []
+        
+        if file_path_filter:
+            where_clauses.append({"file_path": {"$contains": file_path_filter}})
+        if document_id_filter:
+            where_clauses.append({"document_id": document_id_filter})
+        
+        if len(where_clauses) == 1:
+            where = where_clauses[0]
+        elif len(where_clauses) > 1:
+            where = {"$and": where_clauses}
+        
         results = self._collection.query(
-            query_embeddings=[embedding],
-            n_results=n_results,
-            where=filter_metadata,
-            include=["documents", "metadatas", "distances"],
+            query_embeddings=[query_embedding],
+            n_results=min(n_results, 20),  # Cap at 20
+            where=where,
+            include=["documents", "metadatas", "distances"]
         )
+        
 
-        sections = []
+        formatted = []
         if results["ids"] and results["ids"][0]:
-            for i, doc_id in enumerate(results["ids"][0]):
-                sections.append({
-                    "section_id": UUID(doc_id),
-                    "content": results["documents"][0][i] if results["documents"] else "",
+            for i, section_id in enumerate(results["ids"][0]):
+                distance = results["distances"][0][i] if results["distances"] else 0
+                score = 1 - distance
+                
+                if min_score and score < min_score:
+                    continue
+                
+                formatted.append({
+                    "section_id": section_id,
+                    "content": results["documents"][0][i] if results["documents"] else None,
                     "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                    "distance": results["distances"][0][i] if results["distances"] else 0,
-                    "score": 1 - (results["distances"][0][i] if results["distances"] else 0),
+                    "score": round(score, 4)
                 })
+        
+        logger.info(f"Search for '{query[:50]}...' returned {len(formatted)} results")
+        return formatted
 
-        return sections
+    async def search_by_file_path(self, path_pattern: str, n_results: int = 50) -> list[dict]:
+        results = self._collection.get(
+            where={"file_path": {"$contains": path_pattern}},
+            limit=n_results,
+            include=["documents", "metadatas"]
+        )
+        
+        formatted = []
+        if results["ids"]:
+            for i, section_id in enumerate(results["ids"]):
+                formatted.append({
+                    "section_id": section_id,
+                    "content": results["documents"][i] if results["documents"] else None,
+                    "metadata": results["metadatas"][i] if results["metadatas"] else {}
+                })
+        
+        return formatted
 
-    async def search_by_keywords(
-        self,
-        keywords: list[str],
-        n_results: int = 10,
-    ) -> list[dict]:
-        query = " ".join(keywords)
-        return await self.search(query, n_results)
+    async def delete_section(self, section_id: str) -> bool:
+        try:
+            self._collection.delete(ids=[section_id])
+            logger.info(f"Deleted section {section_id} from vector store")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete section {section_id}: {e}")
+            return False
 
-    async def get_collection_stats(self) -> dict:
-        if not self._collection:
-            return {"count": 0, "initialized": False}
+    async def delete_by_document(self, document_id: str) -> int:
+        results = self._collection.get(
+            where={"document_id": document_id},
+            include=[]
+        )
+        
+        if results["ids"]:
+            self._collection.delete(ids=results["ids"])
+            logger.info(f"Deleted {len(results['ids'])} sections for document {document_id}")
+            return len(results["ids"])
+        
+        return 0
 
+    def get_collection_stats(self) -> dict:
         return {
-            "count": self._collection.count(),
-            "initialized": True,
             "name": settings.chroma_collection_name,
+            "count": self._collection.count(),
+            "initialized": True
         }
 
-    async def clear_collection(self) -> None:
-        if not self._collection or not self._client:
-            return
-
-        self._client.delete_collection(settings.chroma_collection_name)
-        self._collection = self._client.create_collection(
-            name=settings.chroma_collection_name,
-            metadata={"hnsw:space": "cosine"},
-        )
-        logger.info("ChromaDB collection cleared")
-
-
-
-search_service = SearchService()
+    async def reindex_section(
+        self,
+        section_id: str,
+        content: str,
+        metadata: dict | None = None
+    ) -> str:
+        return await self.add_section(section_id, content, metadata)

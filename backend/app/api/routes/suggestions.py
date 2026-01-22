@@ -1,276 +1,193 @@
-from typing import Optional
+"""API routes for edit suggestions."""
+
+import logging
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from app.db import get_db
-from app.models.document import Document, DocumentSection
-from app.models.history import UserAction
-from app.models.query import Query
+
+from app.api.deps import get_db
 from app.models.suggestion import EditSuggestion, SuggestionStatus
-from app.schemas.history import HistoryCreate
-from app.schemas.suggestion import (
-    BulkSuggestionUpdate,
-    SuggestionApplyRequest,
-    SuggestionApplyResponse,
-    SuggestionResponse,
-    SuggestionUpdate,
-    SuggestionWithContext,
-)
+from app.models.history import EditHistory, UserAction
 from app.services.document_service import DocumentService
-from app.services.history_service import HistoryService
-from app.services.search_service import search_service
+from app.schemas.suggestion import SuggestionResponse, SuggestionUpdate
 
-router = APIRouter()
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/suggestions", tags=["suggestions"])
 
 
-@router.get("/{suggestion_id}", response_model=SuggestionWithContext)
+@router.get("/{suggestion_id}", response_model=SuggestionResponse)
 async def get_suggestion(
     suggestion_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db)
 ):
+    """Get a suggestion by ID."""
     result = await db.execute(
-        select(EditSuggestion).where(EditSuggestion.id == suggestion_id)
+        select(EditSuggestion)
+        .options(selectinload(EditSuggestion.section))
+        .where(EditSuggestion.id == suggestion_id)
     )
     suggestion = result.scalar_one_or_none()
     
     if not suggestion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Suggestion not found",
-        )
+        raise HTTPException(status_code=404, detail="Suggestion not found")
     
-    section_result = await db.execute(
-        select(DocumentSection)
-        .options(selectinload(DocumentSection.document))
-        .where(DocumentSection.id == suggestion.section_id)
-    )
-    section = section_result.scalar_one_or_none()
-    
-    section_title = None
-    file_path = None
-    full_content = ""
-    
-    if section:
-        section_title = section.section_title
-        full_content = section.content
-        if section.document:
-            file_path = section.document.file_path
-    
-    # TODO: Get affected sections (dependencies)
-    affected_sections = []
-    
-    return SuggestionWithContext(
-        id=suggestion.id,
-        query_id=suggestion.query_id,
-        section_id=suggestion.section_id,
-        original_text=suggestion.original_text,
-        suggested_text=suggestion.suggested_text,
-        reasoning=suggestion.reasoning,
-        confidence=suggestion.confidence,
-        status=suggestion.status,
-        edited_text=suggestion.edited_text,
-        created_at=suggestion.created_at,
-        updated_at=suggestion.updated_at,
-        section_title=section_title,
-        file_path=file_path,
-        full_section_content=full_content,
-        affected_sections=affected_sections,
-    )
+    return suggestion
 
 
 @router.patch("/{suggestion_id}", response_model=SuggestionResponse)
 async def update_suggestion(
     suggestion_id: UUID,
-    data: SuggestionUpdate,
-    db: AsyncSession = Depends(get_db),
+    update: SuggestionUpdate,
+    db: AsyncSession = Depends(get_db)
 ):
+    """Update a suggestion (status, edited_text)."""
     result = await db.execute(
-        select(EditSuggestion).where(EditSuggestion.id == suggestion_id)
+        select(EditSuggestion)
+        .options(selectinload(EditSuggestion.section))
+        .where(EditSuggestion.id == suggestion_id)
     )
     suggestion = result.scalar_one_or_none()
     
     if not suggestion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Suggestion not found",
-        )
+        raise HTTPException(status_code=404, detail="Suggestion not found")
     
-    if data.status is not None:
-        suggestion.status = data.status
-    
-    if data.edited_text is not None:
-        suggestion.edited_text = data.edited_text
-        suggestion.status = SuggestionStatus.EDITED
+    if update.status:
+        suggestion.status = update.status
+    if update.edited_text is not None:
+        suggestion.edited_text = update.edited_text
     
     await db.commit()
     await db.refresh(suggestion)
-
-    section_result = await db.execute(
-        select(DocumentSection)
-        .options(selectinload(DocumentSection.document))
-        .where(DocumentSection.id == suggestion.section_id)
-    )
-    section = section_result.scalar_one_or_none()
     
-    return SuggestionResponse(
-        id=suggestion.id,
-        query_id=suggestion.query_id,
-        section_id=suggestion.section_id,
-        original_text=suggestion.original_text,
-        suggested_text=suggestion.suggested_text,
-        reasoning=suggestion.reasoning,
-        confidence=suggestion.confidence,
-        status=suggestion.status,
-        edited_text=suggestion.edited_text,
-        created_at=suggestion.created_at,
-        updated_at=suggestion.updated_at,
-        section_title=section.section_title if section else None,
-        file_path=section.document.file_path if section and section.document else None,
-    )
+    return suggestion
 
 
-@router.post("/{suggestion_id}/apply", response_model=SuggestionApplyResponse)
-async def apply_suggestion(
+@router.post("/{suggestion_id}/accept", response_model=dict)
+async def accept_suggestion(
     suggestion_id: UUID,
-    data: SuggestionApplyRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db)
 ):
-
+    """Accept and apply a suggestion to the document."""
     result = await db.execute(
-        select(EditSuggestion).where(EditSuggestion.id == suggestion_id)
+        select(EditSuggestion)
+        .options(
+            selectinload(EditSuggestion.section).selectinload(
+                __import__('app.models.document', fromlist=['DocumentSection']).DocumentSection.document
+            ),
+            selectinload(EditSuggestion.query)
+        )
+        .where(EditSuggestion.id == suggestion_id)
     )
     suggestion = result.scalar_one_or_none()
     
     if not suggestion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Suggestion not found",
-        )
+        raise HTTPException(status_code=404, detail="Suggestion not found")
     
-    if suggestion.status == SuggestionStatus.REJECTED:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot apply rejected suggestion",
-        )
+    if suggestion.status == SuggestionStatus.APPLIED:
+        raise HTTPException(status_code=400, detail="Suggestion already applied")
     
-    section_result = await db.execute(
-        select(DocumentSection)
-        .options(selectinload(DocumentSection.document))
-        .where(DocumentSection.id == suggestion.section_id)
-    )
-    section = section_result.scalar_one_or_none()
+    if not suggestion.section:
+        raise HTTPException(status_code=400, detail="Section not found")
     
-    if not section:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Section not found",
-        )
+    # Use edited_text if user modified, otherwise use suggested_text
+    new_content = suggestion.edited_text or suggestion.suggested_text
+    old_content = suggestion.original_text
     
-    if data.use_edited_text and suggestion.edited_text:
-        new_text = suggestion.edited_text
-        action = UserAction.EDITED
-    else:
-        new_text = suggestion.suggested_text
-        action = UserAction.ACCEPTED
-    
-    old_content = section.content
-    
+    # Apply to section
     doc_service = DocumentService(db)
-    await doc_service.update_section_content(section.id, new_text)
-
-    suggestion.status = SuggestionStatus.ACCEPTED
-  
-    history_service = HistoryService(db)
-    
-    query_result = await db.execute(
-        select(Query).where(Query.id == suggestion.query_id)
-    )
-    query = query_result.scalar_one_or_none()
-    
-    history = await history_service.create(
-        HistoryCreate(
-            document_id=section.document_id,
-            section_id=section.id,
-            suggestion_id=suggestion.id,
-            old_content=old_content,
-            new_content=new_text,
-            user_action=action,
-            query_text=query.query_text if query else None,
-            file_path=section.document.file_path if section.document else None,
-            section_title=section.section_title,
-        )
+    await doc_service.apply_suggestion_to_section(
+        section_id=suggestion.section_id,
+        new_content=new_content
     )
     
-    await search_service.update_section(
-        section_id=section.id,
-        content=new_text,
-        metadata={
-            "document_id": str(section.document_id),
-            "file_path": section.document.file_path if section.document else "",
-            "section_title": section.section_title or "",
-            "order": section.order,
-        },
+    # Update suggestion status
+    suggestion.status = SuggestionStatus.APPLIED
+    
+    # Create history entry
+    history = EditHistory(
+        document_id=suggestion.section.document_id,
+        section_id=suggestion.section_id,
+        suggestion_id=suggestion.id,
+        old_content=old_content,
+        new_content=new_content,
+        user_action=UserAction.ACCEPTED,
+        query_text=suggestion.query.query_text if suggestion.query else None,
+        file_path=suggestion.section.document.file_path if suggestion.section.document else None,
+        section_title=suggestion.section.section_title
     )
+    db.add(history)
     
     await db.commit()
     
-    await db.refresh(section)
-    document = await doc_service.get_by_id(section.document_id)
+    logger.info(f"Applied suggestion {suggestion_id}")
     
-    return SuggestionApplyResponse(
-        success=True,
-        message="Suggestion applied successfully",
-        history_id=history.id,
-        new_document_content=document.content if document else None,
-    )
+    return {
+        "success": True,
+        "suggestion_id": str(suggestion_id),
+        "section_id": str(suggestion.section_id),
+        "message": "Suggestion applied successfully"
+    }
 
 
-@router.post("/bulk", response_model=list[SuggestionResponse])
-async def bulk_update_suggestions(
-    data: BulkSuggestionUpdate,
-    db: AsyncSession = Depends(get_db),
+@router.post("/{suggestion_id}/reject", response_model=dict)
+async def reject_suggestion(
+    suggestion_id: UUID,
+    db: AsyncSession = Depends(get_db)
 ):
-    updated = []
-    
-    for suggestion_id in data.suggestion_ids:
-        result = await db.execute(
-            select(EditSuggestion).where(EditSuggestion.id == suggestion_id)
+    """Reject a suggestion."""
+    result = await db.execute(
+        select(EditSuggestion)
+        .options(
+            selectinload(EditSuggestion.section),
+            selectinload(EditSuggestion.query)
         )
-        suggestion = result.scalar_one_or_none()
-        
-        if suggestion:
-            suggestion.status = data.status
-            updated.append(suggestion)
+        .where(EditSuggestion.id == suggestion_id)
+    )
+    suggestion = result.scalar_one_or_none()
+    
+    if not suggestion:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+    
+    if suggestion.status != SuggestionStatus.PENDING:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot reject suggestion with status {suggestion.status.value}"
+        )
+    
+    suggestion.status = SuggestionStatus.REJECTED
+    
+    # Create history entry
+    history = EditHistory(
+        document_id=suggestion.section.document_id if suggestion.section else None,
+        section_id=suggestion.section_id,
+        suggestion_id=suggestion.id,
+        old_content=suggestion.original_text,
+        new_content=suggestion.original_text,  # No change
+        user_action=UserAction.REJECTED,
+        query_text=suggestion.query.query_text if suggestion.query else None,
+        file_path=suggestion.section.document.file_path if suggestion.section and suggestion.section.document else None,
+        section_title=suggestion.section.section_title if suggestion.section else None
+    )
+    db.add(history)
     
     await db.commit()
     
-    responses = []
-    for s in updated:
-        section_result = await db.execute(
-            select(DocumentSection)
-            .options(selectinload(DocumentSection.document))
-            .where(DocumentSection.id == s.section_id)
-        )
-        section = section_result.scalar_one_or_none()
-        
-        responses.append(
-            SuggestionResponse(
-                id=s.id,
-                query_id=s.query_id,
-                section_id=s.section_id,
-                original_text=s.original_text,
-                suggested_text=s.suggested_text,
-                reasoning=s.reasoning,
-                confidence=s.confidence,
-                status=s.status,
-                edited_text=s.edited_text,
-                created_at=s.created_at,
-                updated_at=s.updated_at,
-                section_title=section.section_title if section else None,
-                file_path=section.document.file_path if section and section.document else None,
-            )
-        )
+    logger.info(f"Rejected suggestion {suggestion_id}")
     
-    return responses
+    return {
+        "success": True,
+        "suggestion_id": str(suggestion_id),
+        "message": "Suggestion rejected"
+    }
+
+
+@router.post("/{suggestion_id}/apply", response_model=dict)
+async def apply_suggestion(
+    suggestion_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """Alias for accept - apply a suggestion to the document."""
+    return await accept_suggestion(suggestion_id, db)
