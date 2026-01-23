@@ -16,7 +16,7 @@ from app.schemas.suggestion import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/suggestions", tags=["suggestions"])
+router = APIRouter()
 
 
 @router.get("/{suggestion_id}", response_model=SuggestionResponse)
@@ -106,7 +106,7 @@ async def accept_suggestion(
         ],
     )
 
-    if suggestion.status == SuggestionStatus.APPLIED:
+    if suggestion.status == SuggestionStatus.ACCEPTED:
         raise HTTPException(400, "Suggestion already applied")
 
     if not suggestion.section:
@@ -121,7 +121,7 @@ async def accept_suggestion(
         new_content=new_content
     )
 
-    suggestion.status = SuggestionStatus.APPLIED
+    suggestion.status = SuggestionStatus.ACCEPTED
 
     history = EditHistory(
         document_id=suggestion.section.document_id,
@@ -196,10 +196,3 @@ async def reject_suggestion(
         message="Suggestion rejected"
     )
 
-
-@router.post("/{suggestion_id}/apply", response_model=SuggestionActionResponse)
-async def apply_suggestion(
-    suggestion_id: UUID,
-    db: AsyncSession = Depends(get_db),
-) -> SuggestionActionResponse:
-    return await accept_suggestion(suggestion_id, db)

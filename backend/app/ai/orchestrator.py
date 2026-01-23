@@ -21,7 +21,8 @@ from app.ai.tool_schemas import (
     ToolErrorResponse,
 )
 from app.config import settings
-from app.models.document import Document, DocumentSection
+from app.models.document_base import Document
+from app.models.document import DocumentSection
 from app.models.query import Query, QueryStatus
 from app.models.suggestion import EditSuggestion, SuggestionStatus
 from app.services.dependency_service import DependencyService

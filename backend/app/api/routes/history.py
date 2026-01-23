@@ -10,7 +10,7 @@ from app.models.history import EditHistory, UserAction
 from app.schemas.history import HistoryResponse, HistoryStatsResponse
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/history", tags=["history"])
+router = APIRouter()
 
 
 @router.get("/", response_model=list[HistoryResponse])

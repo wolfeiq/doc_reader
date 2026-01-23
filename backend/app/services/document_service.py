@@ -8,8 +8,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
-from app.models.document import Document, DocumentSection
+from app.models.document_base import Document
+from app.models.document import DocumentSection
 from app.services.dependency_service import DependencyService
 from app.services.search_service import SearchService
 

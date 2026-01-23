@@ -47,7 +47,7 @@ class Query(Base, TimestampMixin):
     )
     query_text: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[QueryStatus] = mapped_column(
-        SQLEnum(QueryStatus, name="query_status"),
+        SQLEnum(QueryStatus, name="querystatus"),
         nullable=False,
         default=QueryStatus.PENDING,
         index=True,

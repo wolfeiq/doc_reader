@@ -20,7 +20,7 @@ from app.ai.orchestrator import process_query
 from app.api.utils import get_query_or_404
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/queries", tags=["queries"])
+router = APIRouter()
 
 
 @router.post("/", response_model=QueryResponse, status_code=201)

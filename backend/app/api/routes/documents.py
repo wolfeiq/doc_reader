@@ -11,7 +11,8 @@ from backend.app.api.utils.helper import (
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
-from app.models.document import Document, DocumentSection
+from app.models.document import DocumentSection
+from app.models.document_base import Document
 from app.models.suggestion import EditSuggestion, SuggestionStatus
 from app.schemas.document import (
     DocumentCreate,
@@ -30,7 +31,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 DBSession = Annotated[AsyncSession, Depends(get_db)]
-
 
 @router.get("/", response_model=list[DocumentListResponse])
 async def list_documents(

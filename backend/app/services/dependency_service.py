@@ -5,8 +5,9 @@ from typing import Literal, Sequence
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
-from app.models.document import Document, DocumentSection, SectionDependency
+from app.models.document_base import Document
+from app.models.document import DocumentSection
+from app.models.section_dependency import SectionDependency
 from app.schemas.document import (
     DependencyGraphResponse,
     DependencyNode,

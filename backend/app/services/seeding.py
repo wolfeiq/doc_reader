@@ -4,7 +4,10 @@ from pathlib import Path
 from sqlalchemy import func, select
 
 from app.db.session import AsyncSessionLocal
-from app.models.document import Document, DocumentSection, SectionDependency
+from app.models.document_base import Document
+from app.models.document import DocumentSection
+
+from app.models.section_dependency import SectionDependency
 from app.models.history import EditHistory
 from app.models.query import Query
 from app.models.suggestion import EditSuggestion

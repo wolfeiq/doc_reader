@@ -84,7 +84,7 @@ async def root():
 
 @app.get("/health")
 async def health():
-    search_stats = await search_service.get_collection_stats()
+    search_stats = search_service.get_collection_stats()
     return {
         "status": "healthy",
         "search_service": search_stats,

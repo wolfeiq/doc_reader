@@ -4,7 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from typing import Sequence
-from app.models.document import Document, DocumentSection
+from app.models.document_base import Document
+from app.models.document import DocumentSection
 from app.models.history import EditHistory, UserAction
 from app.models.query import Query
 from app.models.suggestion import EditSuggestion, SuggestionStatus
