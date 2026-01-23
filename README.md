@@ -15,12 +15,13 @@ Phase 1 ✅
 - Document service with section parsing
 - History service
 
-Phase 2
+Phase 2 ✅
 
 - ChromaDB search service with OpenAI embeddings
 - AI orchestrator with streaming
 - SSE endpoints for real-time progress
 - All API routes (documents, queries, suggestions, history)
+- Optional Celery Tasks for Background Job Orchestration - Query Processing and Document Reindexing Tasks
 
 ToDo:
 
