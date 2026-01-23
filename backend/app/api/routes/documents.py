@@ -10,6 +10,7 @@ from backend.app.api.utils.helper import (
 )
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.deps import get_db
 from app.models.document import DocumentSection
 from app.models.document_base import Document
@@ -26,11 +27,17 @@ from app.schemas.document import (
 )
 from app.services.dependency_service import DependencyService
 from app.services.document_service import DocumentService
+from app.tasks.document_tasks import (
+    generate_embeddings_task,
+    reindex_document_task,
+)
+from app.utils.celery_helpers import get_task_info
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 DBSession = Annotated[AsyncSession, Depends(get_db)]
+
 
 @router.get("/", response_model=list[DocumentListResponse])
 async def list_documents(
@@ -38,7 +45,6 @@ async def list_documents(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[DocumentListResponse]:
-
     service = DocumentService(db)
     docs = await service.list_documents(skip=skip, limit=limit)
     return [
@@ -58,12 +64,23 @@ async def list_documents(
 @router.post("/", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def create_document(
     doc_in: DocumentCreate, 
-    db: DBSession
+    db: DBSession,
+    async_embeddings: bool = Query(default=True, description="Generate embeddings asynchronously")
 ) -> DocumentResponse:
 
     service = DocumentService(db)
-    doc = await service.create_document(file_path=doc_in.file_path, content=doc_in.content)
+    
+
+    doc = await service.create_document(
+        file_path=doc_in.file_path, 
+        content=doc_in.content,
+        generate_embeddings=not async_embeddings 
+    )
     await db.refresh(doc, ["sections"])
+
+    if async_embeddings:
+        task = generate_embeddings_task.delay(str(doc.id))
+        logger.info(f"Started embedding task {task.id} for document {doc.id}")
     
     return DocumentResponse(
         id=doc.id,
@@ -73,22 +90,29 @@ async def create_document(
         checksum=doc.checksum,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
-        sections=[
-            section for section in doc.sections
-        ] if doc.sections else []
+        sections=list(doc.sections) if doc.sections else []
     )
 
 
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     db: DBSession, 
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    async_embeddings: bool = Query(default=True, description="Generate embeddings asynchronously")
 ) -> DocumentResponse:
-
     content_str = await decode_upload_file(file)
     service = DocumentService(db)
-    doc = await service.create_document(file_path=file.filename or "untitled", content=content_str)
+    
+    doc = await service.create_document(
+        file_path=file.filename or "untitled", 
+        content=content_str,
+        generate_embeddings=not async_embeddings
+    )
     await db.refresh(doc, ["sections"])
+    
+    if async_embeddings:
+        task = generate_embeddings_task.delay(str(doc.id))
+        logger.info(f"Started embedding task {task.id} for document {doc.id}")
     
     return DocumentResponse(
         id=doc.id,
@@ -98,9 +122,7 @@ async def upload_document(
         checksum=doc.checksum,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
-        sections=[
-            section for section in doc.sections
-        ] if doc.sections else []
+        sections=list(doc.sections) if doc.sections else []
     )
 
 
@@ -109,7 +131,6 @@ async def get_document(
     document_id: UUID, 
     db: DBSession
 ) -> DocumentResponse:
-
     service = DocumentService(db)
     doc = await service.get_document(document_id)
     if not doc:
@@ -126,9 +147,7 @@ async def get_document(
         checksum=doc.checksum,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
-        sections=[
-            section for section in doc.sections
-        ] if doc.sections else []
+        sections=list(doc.sections) if doc.sections else []
     )
 
 
@@ -192,9 +211,7 @@ async def get_document_dependencies(
     document_id: UUID, 
     db: DBSession
 ) -> DependencyGraphResponse:
-
     service = DependencyService(db)
-
     return await service.build_dependency_graph(document_id)
 
 
@@ -203,6 +220,7 @@ async def delete_document(
     document_id: UUID, 
     db: DBSession
 ) -> None:
+
     service = DocumentService(db)
     success = await service.delete_document(document_id)
     if not success:
@@ -212,18 +230,37 @@ async def delete_document(
         )
 
 
-@router.post("/{document_id}/reindex", response_model=ReindexResponse)
+@router.post("/{document_id}/reindex")
 async def reindex_document(
     document_id: UUID, 
     db: DBSession
-) -> ReindexResponse:
+) -> dict:
 
     doc = await get_document_or_404(db, document_id)
-    service = DocumentService(db)
-    updated_doc = await service.update_document(file_path=doc.file_path, content=doc.content)
     
-    return ReindexResponse(
-        success=True,
-        document_id=document_id,
-        sections_indexed=len(updated_doc.sections) if updated_doc.sections else 0,
-    )
+    task = reindex_document_task.delay(str(document_id))
+    
+    logger.info(f"Started reindex task {task.id} for document {document_id}")
+    
+    return {
+        "message": "Reindexing started in background",
+        "document_id": str(document_id),
+        "task_id": task.id,
+    }
+
+
+@router.get("/{document_id}/task/{task_id}")
+async def get_document_task_status(
+    document_id: UUID,
+    task_id: str,
+    db: DBSession
+) -> dict:
+
+    await get_document_or_404(db, document_id)
+
+    task_info = get_task_info(task_id)
+    
+    return {
+        "document_id": str(document_id),
+        **task_info
+    }

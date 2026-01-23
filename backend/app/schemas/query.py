@@ -1,9 +1,10 @@
+from __future__ import annotations
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 from app.models.query import QueryStatus
-from app.schemas.suggestion import SuggestionResponse
+
 
 class QueryCreate(BaseModel):
     query_text: str = Field(..., min_length=1, max_length=5000)
@@ -25,8 +26,7 @@ class QueryResponse(BaseModel):
 
 class QueryDetailResponse(QueryResponse):
     suggestions: list["SuggestionResponse"] = Field(default_factory=list)
-
-
+    
 class QuerySuggestionListItem(BaseModel):
 
     id: UUID
@@ -43,6 +43,7 @@ class QuerySuggestionListItem(BaseModel):
 class QueryProcessResponse(BaseModel):
     message: str
     query_id: UUID
+    task_id: Optional[str] = None 
 
 
 class StreamEvent(BaseModel):
@@ -76,3 +77,6 @@ class ErrorEvent(BaseModel):
 class CompletedEvent(BaseModel):
     total_suggestions: int
     query_id: UUID
+
+from app.schemas.suggestion import SuggestionResponse
+QueryDetailResponse.model_rebuild()

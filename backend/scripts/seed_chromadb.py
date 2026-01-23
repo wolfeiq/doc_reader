@@ -1,4 +1,3 @@
-# scripts/seed_chromadb.py
 import asyncio
 import sys
 sys.path.insert(0, '.')
@@ -13,8 +12,7 @@ from app.services.search_service import search_service
 
 async def sync_sections_to_chromadb():
     await search_service.initialize()
-    
-    # Check current count
+
     stats = search_service.get_collection_stats()
     print(f"ChromaDB before: {stats['count']} sections")
     

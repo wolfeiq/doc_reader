@@ -1,11 +1,12 @@
 import json
 import logging
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sse_starlette.sse import EventSourceResponse
+
 from app.api.deps import get_db
 from app.models.query import Query, QueryStatus
 from app.models.suggestion import EditSuggestion
@@ -18,6 +19,8 @@ from app.schemas.query import (
 )
 from app.ai.orchestrator import process_query
 from app.api.utils import get_query_or_404
+from app.tasks.query_tasks import process_query_async
+from app.utils.celery_helpers import get_task_info
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -68,7 +71,6 @@ async def list_queries(
     result = await db.execute(stmt)
     queries = result.scalars().all()
     
-
     responses: list[QueryResponse] = []
     for query in queries:
         count_result = await db.execute(
@@ -115,10 +117,7 @@ async def get_query(
         created_at=query.created_at,
         updated_at=query.updated_at,
         suggestion_count=len(query.suggestions),
-        suggestions=[
-            # Convert to SuggestionResponse
-            suggestion for suggestion in query.suggestions
-        ]
+        suggestions=list(query.suggestions)
     )
 
 
@@ -153,11 +152,12 @@ async def get_query_suggestions(
     ]
 
 
-@router.post("/{query_id}/process")
+@router.post("/{query_id}/process/stream")
 async def process_query_stream(
     query_id: UUID,
     db: AsyncSession = Depends(get_db)
 ) -> EventSourceResponse:
+
     query = await get_query_or_404(db, query_id)
     
     if query.status not in (QueryStatus.PENDING, QueryStatus.FAILED):
@@ -176,12 +176,12 @@ async def process_query_stream(
     return EventSourceResponse(event_generator())
 
 
-@router.post("/{query_id}/process/sync", response_model=QueryProcessResponse)
-async def process_query_sync(
+@router.post("/{query_id}/process", response_model=QueryProcessResponse)
+async def process_query_celery(
     query_id: UUID,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ) -> QueryProcessResponse:
+
     query = await get_query_or_404(db, query_id)
     
     if query.status not in (QueryStatus.PENDING, QueryStatus.FAILED):
@@ -190,16 +190,31 @@ async def process_query_sync(
             detail=f"Query already {query.status.value}"
         )
     
-    async def run_processing() -> None:
-        async for _ in process_query(query_id, query.query_text, db):
-            pass  # Consume all events
+    task = process_query_async.delay(str(query_id), query.query_text)
     
-    background_tasks.add_task(run_processing)
+    logger.info(f"Started Celery task {task.id} for query {query_id}")
     
     return QueryProcessResponse(
-        message="Processing started",
-        query_id=query_id
+        message="Processing started in background",
+        query_id=query_id,
+        task_id=task.id,
     )
+
+
+@router.get("/{query_id}/task/{task_id}")
+async def get_task_status(
+    query_id: UUID,
+    task_id: str,
+    db: AsyncSession = Depends(get_db)
+) -> dict:
+
+    await get_query_or_404(db, query_id)
+    task_info = get_task_info(task_id)
+    
+    return {
+        "query_id": str(query_id),
+        **task_info
+    }
 
 
 @router.delete("/{query_id}", status_code=204)
@@ -207,7 +222,6 @@ async def delete_query(
     query_id: UUID,
     db: AsyncSession = Depends(get_db)
 ) -> None:
-
     query = await get_query_or_404(db, query_id)
     await db.delete(query)
     await db.commit()

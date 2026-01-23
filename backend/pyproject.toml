@@ -5,21 +5,25 @@ description = "AI-powered documentation update assistant"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.109.0",
-    "uvicorn[standard]>=0.27.0",
-    "sqlalchemy[asyncio]>=2.0.25",
-    "asyncpg>=0.29.0",
-    "alembic>=1.13.0",
-    "pydantic>=2.5.0",
-    "pydantic-settings>=2.1.0",
-    "python-multipart>=0.0.6",
-    "openai>=1.12.0",
-    "chromadb>=0.4.22",
-    "sse-starlette>=1.8.0",
-    "python-dotenv>=1.0.0",
-    "httpx>=0.26.0",
-    "tenacity>=8.2.0",
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
+    "alembic",
+    "pydantic",
+    "pydantic-settings",
+    "python-multipart",
+    "openai",
+    "chromadb",
+    "sse-starlette",
+    "python-dotenv",
+    "httpx",
+    "tenacity",
+    "celery[redis]",
+    "flower",
+    "redis"
 ]
+
 
 [project.optional-dependencies]
 dev = [

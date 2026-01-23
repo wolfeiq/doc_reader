@@ -70,14 +70,12 @@ class ToolExecutor:
 
     @property
     def search_service(self) -> SearchService:
-        """Lazy-loaded search service instance."""
         if self._search_service is None:
             self._search_service = SearchService()
         return self._search_service
 
     @property
     def dependency_service(self) -> DependencyService:
-        """Lazy-loaded dependency service instance."""
         if self._dependency_service is None:
             self._dependency_service = DependencyService(self.db)
         return self._dependency_service
@@ -282,8 +280,8 @@ async def process_query(
             logger.debug(f"Iteration {iteration + 1}/{MAX_ITERATIONS}")
             response = await openai_client.chat.completions.create(
                 model=settings.openai_model,
-                messages=state.messages,  # type: ignore[arg-type]
-                tools=TOOLS,  # type: ignore[arg-type]
+                messages=state.messages,  
+                tools=TOOLS, 
                 tool_choice="auto",
             )
 

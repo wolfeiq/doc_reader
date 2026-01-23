@@ -144,9 +144,6 @@ class ToolErrorResponse(BaseModel):
     error: str
     details: str | None = None
 
-
-
-
 TOOL_ARG_SCHEMAS: dict[str, type[BaseModel]] = {
     "semantic_search": SemanticSearchArgs,
     "get_section_content": GetSectionContentArgs,

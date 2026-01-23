@@ -6,6 +6,7 @@ dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+chroma_data/
 __pycache__/
 *.pyc
 .venv/
