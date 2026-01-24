@@ -64,9 +64,6 @@ class QueryProcessResponse(BaseModel):
     task_id: str | None = None
 
 
-# --- SSE Event Schemas ---
-
-
 class StreamEvent(BaseModel):
     """Generic SSE event wrapper."""
 
