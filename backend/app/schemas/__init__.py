@@ -1,28 +1,40 @@
+"""Pydantic schemas for API request/response validation."""
+
 from app.schemas.document import (
-    DocumentBase,
     DocumentCreate,
     DocumentListResponse,
     DocumentPreview,
+    DocumentPreviewResponse,
     DocumentResponse,
-    DocumentSectionBase,
     DocumentSectionCreate,
+    DocumentSectionInfo,
     DocumentSectionResponse,
     DocumentUpdate,
+    DependencyEdge,
+    DependencyGraphResponse,
+    DependencyNode,
+    ReindexResponse,
+    SectionDependenciesResponse,
+    SectionDependencyInfo,
     SectionDependencyResponse,
+    SectionPreview,
 )
 from app.schemas.history import (
-    HistoryBase,
     HistoryCreate,
     HistoryFilter,
     HistoryListResponse,
     HistoryResponse,
+    HistoryStatsResponse,
+    UserAction,
 )
 from app.schemas.query import (
     CompletedEvent,
     ErrorEvent,
     QueryCreate,
     QueryDetailResponse,
+    QueryProcessResponse,
     QueryResponse,
+    QuerySuggestionListItem,
     SearchProgressEvent,
     StatusUpdateEvent,
     StreamEvent,
@@ -30,9 +42,9 @@ from app.schemas.query import (
 )
 from app.schemas.suggestion import (
     BulkSuggestionUpdate,
+    SuggestionActionResponse,
     SuggestionApplyRequest,
     SuggestionApplyResponse,
-    SuggestionBase,
     SuggestionCreate,
     SuggestionResponse,
     SuggestionUpdate,
@@ -40,37 +52,48 @@ from app.schemas.suggestion import (
 )
 
 __all__ = [
-    "DocumentBase",
+    # Document
     "DocumentCreate",
     "DocumentListResponse",
     "DocumentPreview",
+    "DocumentPreviewResponse",
     "DocumentResponse",
-    "DocumentSectionBase",
     "DocumentSectionCreate",
+    "DocumentSectionInfo",
     "DocumentSectionResponse",
     "DocumentUpdate",
+    "DependencyEdge",
+    "DependencyGraphResponse",
+    "DependencyNode",
+    "ReindexResponse",
+    "SectionDependenciesResponse",
+    "SectionDependencyInfo",
     "SectionDependencyResponse",
-
-    "HistoryBase",
+    "SectionPreview",
+    # History
     "HistoryCreate",
     "HistoryFilter",
     "HistoryListResponse",
     "HistoryResponse",
-
+    "HistoryStatsResponse",
+    "UserAction",
+    # Query
     "CompletedEvent",
     "ErrorEvent",
     "QueryCreate",
     "QueryDetailResponse",
+    "QueryProcessResponse",
     "QueryResponse",
+    "QuerySuggestionListItem",
     "SearchProgressEvent",
     "StatusUpdateEvent",
     "StreamEvent",
     "SuggestionGeneratedEvent",
-
+    # Suggestion
     "BulkSuggestionUpdate",
+    "SuggestionActionResponse",
     "SuggestionApplyRequest",
     "SuggestionApplyResponse",
-    "SuggestionBase",
     "SuggestionCreate",
     "SuggestionResponse",
     "SuggestionUpdate",

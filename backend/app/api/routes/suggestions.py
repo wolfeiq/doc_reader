@@ -28,7 +28,7 @@ async def get_suggestion(
     suggestion = await get_suggestion_or_404(
         db,
         suggestion_id,
-        options=[selectinload(EditSuggestion.section)],
+        options=[selectinload(EditSuggestion.section).selectinload(DocumentSection.document)],
     )
     return SuggestionResponse(
         id=suggestion.id,
@@ -60,7 +60,7 @@ async def update_suggestion(
     suggestion = await get_suggestion_or_404(
         db,
         suggestion_id,
-        options=[selectinload(EditSuggestion.section)],
+        options=[selectinload(EditSuggestion.section).selectinload(DocumentSection.document)],
     )
 
     if update.status is not None:
@@ -195,4 +195,3 @@ async def reject_suggestion(
         section_id=suggestion.section_id,
         message="Suggestion rejected"
     )
-

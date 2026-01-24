@@ -21,7 +21,7 @@ dependencies = [
     "tenacity",
     "celery[redis]",
     "flower",
-    "redis"
+    "redis[hiredis]>=5.0.0"
 ]
 
 
