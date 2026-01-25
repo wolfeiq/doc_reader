@@ -1,8 +1,9 @@
 import re
 import logging
+from pathlib import Path
 from uuid import UUID
 from typing import Literal, Sequence
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.models.document_base import Document
@@ -18,15 +19,23 @@ logger = logging.getLogger(__name__)
 
 
 class DependencyService:
-
-    LINK_PATTERN = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
-    REFERENCE_PATTERN = re.compile(
-        r'(?:see|refer to|check|read)\s+["\']?([^"\'.\n]+)["\']?', 
+    MARKDOWN_LINK_PATTERN = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
+    
+    EXPLICIT_REFERENCE_PATTERN = re.compile(
+        r'(?:see|refer to|check|read|described in|explained in)\s+(?:the\s+)?'
+        r'["\']([^"\']{3,})["\'](?:\s+section)?',
         re.IGNORECASE
     )
+
     CODE_REFERENCE_PATTERN = re.compile(
-        r'`([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)`'
+        r'`([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*){1,})`'
     )
+    
+    COMMON_CODE_WORDS = {
+        'id', 'name', 'type', 'value', 'data', 'item', 'user', 'result',
+        'error', 'status', 'code', 'message', 'text', 'true', 'false',
+        'null', 'none', 'self', 'this', 'var', 'let', 'const'
+    }
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -37,10 +46,21 @@ class DependencyService:
     ) -> Sequence[SectionDependency]:
         dependencies: list[SectionDependency] = []
 
-        references = self._extract_references(section.content)
+        if not section.document:
+            await self.db.refresh(section, ["document"])
         
-        for ref_type, ref_value in references:
-            target_section = await self._resolve_reference(ref_value, section.document_id)
+        references = self._extract_references(
+            section.content, 
+            section.document.file_path if section.document else ""
+        )
+        
+        for ref_type, ref_value, anchor in references:
+            target_section = await self._resolve_reference(
+                ref_value, 
+                anchor,
+                section.document_id,
+                section.document.file_path if section.document else ""
+            )
             
             if target_section and target_section.id != section.id:
                 existing = await self.db.execute(
@@ -64,34 +84,167 @@ class DependencyService:
         
         return dependencies
 
-    def _extract_references(self, content: str) -> list[tuple[str, str]]:
+    def _extract_references(
+        self, 
+        content: str, 
+        current_file_path: str
+    ) -> list[tuple[str, str, str | None]]:
+        references: list[tuple[str, str, str | None]] = []
+        seen = set()  # Avoid duplicates
 
-        references: list[tuple[str, str]] = []
 
-        for match in self.LINK_PATTERN.finditer(content):
+        for match in self.MARKDOWN_LINK_PATTERN.finditer(content):
             link_text, link_url = match.groups()
-            if not link_url.startswith(('http://', 'https://', '#')):
-                references.append(('link', link_url))
-        
+            
+            if link_url.startswith(('http://', 'https://', 'mailto:')):
+                continue
+            
+            if link_url.startswith('#'):
+                anchor = link_url[1:] 
+                ref_key = f"anchor:{anchor}"
+                if ref_key not in seen:
+                    references.append(('anchor', current_file_path, anchor))
+                    seen.add(ref_key)
+                continue
+            
+            if '#' in link_url:
+                file_path, anchor = link_url.split('#', 1)
+            else:
+                file_path = link_url
+                anchor = None
 
-        for match in self.REFERENCE_PATTERN.finditer(content):
-            references.append(('reference', match.group(1).strip()))
-        
+            normalized_path = self._normalize_path(file_path, current_file_path)
+            ref_key = f"link:{normalized_path}:{anchor}"
+            
+            if ref_key not in seen and normalized_path:
+                references.append(('link', normalized_path, anchor))
+                seen.add(ref_key)
+
+        for match in self.EXPLICIT_REFERENCE_PATTERN.finditer(content):
+            reference_text = match.group(1).strip()
+            
+            if len(reference_text) < 3 or len(reference_text) > 100:
+                continue
+            
+            ref_key = f"reference:{reference_text}"
+            if ref_key not in seen:
+                references.append(('reference', reference_text, None))
+                seen.add(ref_key)
+
         for match in self.CODE_REFERENCE_PATTERN.finditer(content):
-            references.append(('code', match.group(1)))
+            code_ref = match.group(1)
+            
+            if code_ref.lower() in self.COMMON_CODE_WORDS:
+                continue
+            
+            ref_key = f"code:{code_ref}"
+            if ref_key not in seen:
+                references.append(('code', code_ref, None))
+                seen.add(ref_key)
         
         return references
+
+    def _normalize_path(self, ref_path: str, current_path: str) -> str:
+        try:
+            current_dir = str(Path(current_path).parent)
+            
+            if ref_path.startswith('../') or ref_path.startswith('./'):
+                resolved = Path(current_dir) / ref_path
+                normalized = resolved.resolve()
+            else:
+                normalized = (Path(current_dir) / ref_path).resolve()
+
+            path_str = str(normalized)
+            if not path_str.endswith('.md'):
+                path_str += '.md'
+            
+            return path_str
+        except Exception as e:
+            logger.debug(f"Failed to normalize path {ref_path}: {e}")
+            clean = ref_path.strip()
+            if not clean.endswith('.md') and '/' in clean:
+                clean += '.md'
+            return clean
+
+    @staticmethod
+    def _generate_slug(title: str) -> str:
+        slug = title.lower()
+        slug = re.sub(r'[^\w\s-]', '', slug)
+        slug = re.sub(r'[-\s]+', '-', slug)
+        return slug.strip('-')
 
     async def _resolve_reference(
         self, 
         reference: str, 
-        current_doc_id: UUID
+        anchor: str | None,
+        current_doc_id: UUID,
+        current_file_path: str
     ) -> DocumentSection | None:
-        if reference.endswith('.md'):
+        if anchor:
+            anchor_slug = self._generate_slug(anchor)
+            if reference.endswith('.md') or '/' in reference:
+                result = await self.db.execute(
+                    select(DocumentSection)
+                    .join(Document)
+                    .where(
+                        or_(
+                            Document.file_path == reference,
+                            Document.file_path.endswith(reference),
+                            Document.file_path.like(f'%/{reference}')
+                        )
+                    )
+                    .where(
+                        or_(
+                            func.lower(DocumentSection.section_title) == anchor.lower(),
+                            func.lower(DocumentSection.section_title).like(f'%{anchor.lower()}%')
+                        )
+                    )
+                    .limit(1)
+                )
+                section = result.scalar_one_or_none()
+                if section:
+                    return section
+            
+            result = await self.db.execute(
+                select(DocumentSection)
+                .where(DocumentSection.document_id == current_doc_id)
+                .where(
+                    or_(
+                        func.lower(DocumentSection.section_title) == anchor.lower(),
+                        func.lower(DocumentSection.section_title).like(f'%{anchor.lower()}%')
+                    )
+                )
+                .limit(1)
+            )
+            section = result.scalar_one_or_none()
+            if section:
+                return section
+        
+
+        if reference.endswith('.md') or '/' in reference:
             result = await self.db.execute(
                 select(DocumentSection)
                 .join(Document)
-                .where(Document.file_path.ilike(f'%{reference}%'))
+                .where(
+                    or_(
+                        Document.file_path == reference,
+                        Document.file_path.endswith(reference),
+                        Document.file_path.like(f'%/{reference}')
+                    )
+                )
+                .order_by(DocumentSection.order)
+                .limit(1)
+            )
+            section = result.scalar_one_or_none()
+            if section:
+                return section
+            
+            filename = reference.split('/')[-1].replace('.md', '')
+            result = await self.db.execute(
+                select(DocumentSection)
+                .join(Document)
+                .where(Document.file_path.like(f'%{filename}%'))
+                .order_by(DocumentSection.order)
                 .limit(1)
             )
             section = result.scalar_one_or_none()
@@ -100,19 +253,34 @@ class DependencyService:
         
         result = await self.db.execute(
             select(DocumentSection)
-            .where(DocumentSection.section_title.ilike(f'%{reference}%'))
+            .where(func.lower(DocumentSection.section_title) == reference.lower())
             .limit(1)
         )
         section = result.scalar_one_or_none()
         if section:
             return section
 
-        result = await self.db.execute(
-            select(DocumentSection)
-            .where(DocumentSection.content.ilike(f'%{reference}%'))
-            .limit(1)
-        )
-        return result.scalar_one_or_none()
+        if len(reference) >= 5:
+            result = await self.db.execute(
+                select(DocumentSection)
+                .where(func.lower(DocumentSection.section_title).like(f'%{reference.lower()}%'))
+                .limit(1)
+            )
+            section = result.scalar_one_or_none()
+            if section:
+                return section
+            
+        if '.' in reference or '_' in reference:
+            result = await self.db.execute(
+                select(DocumentSection)
+                .where(DocumentSection.content.like(f'%{reference}%'))
+                .limit(1)
+            )
+            section = result.scalar_one_or_none()
+            if section:
+                return section
+        
+        return None
 
     async def get_dependencies(
         self,

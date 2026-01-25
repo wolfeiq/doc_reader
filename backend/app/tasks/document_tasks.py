@@ -1,9 +1,3 @@
-"""
-Celery tasks for document processing.
-
-Handles background jobs for embedding generation, reindexing, and bulk operations.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -39,7 +33,6 @@ def generate_embeddings_task(
     self: Task,
     document_id: str,
 ) -> GenerateEmbeddingsResultDict:
-    """Generate embeddings for all sections in a document."""
     logger.info(f"Generating embeddings for document {document_id}")
 
     async def _generate() -> GenerateEmbeddingsResultDict:
@@ -110,7 +103,6 @@ def generate_embeddings_task(
 
 @celery_app.task(name="app.tasks.document_tasks.reindex_document")
 def reindex_document_task(document_id: str) -> ReindexResultDict:
-    """Reindex a document, regenerating all embeddings."""
     logger.info(f"Reindexing document {document_id}")
 
     async def _reindex() -> ReindexResultDict:
@@ -149,7 +141,6 @@ def bulk_embed_documents_task(
     self: Task,
     document_ids: list[str],
 ) -> BulkEmbedResultDict:
-    """Generate embeddings for multiple documents."""
     logger.info(f"Bulk embedding {len(document_ids)} documents")
 
     async def _bulk_embed() -> BulkEmbedResultDict:
@@ -192,7 +183,6 @@ def bulk_embed_documents_task(
 
 @celery_app.task(name="app.tasks.document_tasks.delete_document_embeddings")
 def delete_document_embeddings_task(document_id: str) -> DeleteEmbeddingsResultDict:
-    """Delete all embeddings for a document from ChromaDB."""
     logger.info(f"Deleting embeddings for document {document_id}")
 
     async def _delete() -> DeleteEmbeddingsResultDict:

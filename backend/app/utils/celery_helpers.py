@@ -1,6 +1,3 @@
-"""
-Celery helper utilities for async task execution and progress tracking.
-"""
 
 from __future__ import annotations
 
@@ -21,11 +18,7 @@ T = TypeVar("T")
 
 
 def run_async(coro: Coroutine[Any, Any, T]) -> T:
-    """
-    Run an async coroutine from a sync context (Celery task).
-    
-    Creates a new event loop if one doesn't exist.
-    """
+
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
@@ -36,17 +29,10 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
 
 
 async def get_db_session() -> AsyncSession:
-    """Get a new database session."""
     return AsyncSessionLocal()
 
 
 class DBSessionContext:
-    """
-    Async context manager for database sessions in Celery tasks.
-    
-    Handles session lifecycle with automatic commit/rollback.
-    """
-
     def __init__(self) -> None:
         self.session: AsyncSession | None = None
 
@@ -73,7 +59,6 @@ class DBSessionContext:
 
 
 def with_db_session(func: Any) -> Any:
-    """Decorator that injects a database session as the first argument."""
     @wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
         async with DBSessionContext() as db:
@@ -82,7 +67,6 @@ def with_db_session(func: Any) -> Any:
 
 
 def celery_task_wrapper(async_func: Any) -> Any:
-    """Decorator to wrap an async function for use as a Celery task."""
     @wraps(async_func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         return run_async(async_func(*args, **kwargs))
@@ -95,15 +79,7 @@ def update_task_progress(
     total: int,
     message: str = "",
 ) -> None:
-    """
-    Update Celery task progress metadata.
-    
-    Args:
-        task: The bound Celery task (self from @celery_app.task(bind=True))
-        current: Current progress value
-        total: Total expected value
-        message: Optional progress message
-    """
+
     percent = int((current / total) * 100) if total > 0 else 0
 
     task.update_state(
@@ -118,11 +94,6 @@ def update_task_progress(
 
 
 def get_task_info(task_id: str) -> dict[str, Any]:
-    """
-    Get information about a Celery task by ID.
-    
-    Returns a dict with state, result, and progress information.
-    """
     task = celery_app.AsyncResult(task_id)
 
     response: dict[str, Any] = {
@@ -145,16 +116,6 @@ def get_task_info(task_id: str) -> dict[str, Any]:
 
 
 def revoke_task(task_id: str, terminate: bool = False) -> bool:
-    """
-    Revoke (cancel) a Celery task.
-    
-    Args:
-        task_id: The task ID to revoke
-        terminate: If True, forcefully terminate the task
-        
-    Returns:
-        True if revocation was sent (doesn't guarantee task was stopped)
-    """
     try:
         task = celery_app.AsyncResult(task_id)
         task.revoke(terminate=terminate)

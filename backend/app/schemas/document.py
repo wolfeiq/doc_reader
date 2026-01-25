@@ -2,16 +2,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
-
+from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field
 
-
-
-
-
 class DocumentSectionBase(BaseModel):
-
     section_title: str | None = None
     content: str
     order: int = Field(default=0, ge=0)
@@ -20,12 +16,10 @@ class DocumentSectionBase(BaseModel):
 
 
 class DocumentSectionCreate(DocumentSectionBase):
-
     pass
 
 
 class DocumentSectionResponse(DocumentSectionBase):
-
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -36,7 +30,6 @@ class DocumentSectionResponse(DocumentSectionBase):
 
 
 class DocumentSectionInfo(BaseModel):
-
     id: UUID
     section_title: str | None = None
     content: str
@@ -47,25 +40,21 @@ class DocumentSectionInfo(BaseModel):
 
 
 class DocumentBase(BaseModel):
-
     file_path: str = Field(..., min_length=1, max_length=500)
     title: str | None = None
     content: str
 
 
 class DocumentCreate(DocumentBase):
-
     pass
 
 
 class DocumentUpdate(BaseModel):
-
     title: str | None = None
     content: str | None = None
 
 
 class DocumentResponse(BaseModel):
-
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -79,7 +68,6 @@ class DocumentResponse(BaseModel):
 
 
 class DocumentListResponse(BaseModel):
-
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -92,37 +80,12 @@ class DocumentListResponse(BaseModel):
 
 
 
-class SectionPreview(BaseModel):
-
-    section_id: UUID
-    section_title: str | None = None
-    original_content: str
-    preview_content: str
-    suggestion_id: UUID | None = None
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-
-
-class DocumentPreviewResponse(BaseModel):
-
-    id: UUID
-    file_path: str
-    title: str | None = None
-    sections: list[SectionPreview]
-    has_pending_changes: bool
-    pending_suggestion_count: int = Field(ge=0)
-
-
 class DocumentPreview(BaseModel):
-
     document: DocumentResponse
     preview_content: str
     pending_changes: list[dict[str, object]] = Field(default_factory=list)
 
-
-
-
 class DependencyNode(BaseModel):
-
     section_id: UUID
     section_title: str | None = None
     file_path: str
@@ -143,27 +106,23 @@ class SectionDependencyInfo(BaseModel):
 
 
 class SectionDependenciesResponse(BaseModel):
-
     incoming: list[SectionDependencyInfo] = Field(default_factory=list)
     outgoing: list[SectionDependencyInfo] = Field(default_factory=list)
 
 
 class DependencyGraphResponse(BaseModel):
-
     nodes: list[DependencyNode] = Field(default_factory=list)
     edges: list[DependencyEdge] = Field(default_factory=list)
 
 
 
 class ReindexResponse(BaseModel):
-
     success: bool
     document_id: UUID
     sections_indexed: int = Field(ge=0)
 
 
 class SectionDependencyResponse(BaseModel):
-
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -174,3 +133,36 @@ class SectionDependencyResponse(BaseModel):
     target_section_title: str | None = None
     source_file_path: str | None = None
     target_file_path: str | None = None
+
+
+class ChangeType(str, Enum):
+    NONE = "none"      
+    PENDING = "pending"     
+    ACCEPTED = "accepted"   
+    REJECTED = "rejected"   
+
+
+class SectionPreview(BaseModel):
+    section_id: UUID
+    section_title: Optional[str] = None
+    original_content: str
+    preview_content: str
+    suggestion_id: Optional[UUID] = None
+    history_id: Optional[UUID] = None     
+    confidence: Optional[float] = None
+    change_type: ChangeType = ChangeType.NONE  
+    changed_at: datetime | None = None
+    order: Optional[int] = None
+    start_line: Optional[int] = None
+    end_line: Optional[int] = None
+
+
+class DocumentPreviewResponse(BaseModel):
+    id: UUID
+    file_path: str
+    title: str
+    sections: list[SectionPreview]
+    has_pending_changes: bool
+    pending_suggestion_count: int
+    has_recent_changes: bool = False    
+    recent_change_count: int = 0          

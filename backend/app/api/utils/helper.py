@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from uuid import UUID
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select
@@ -172,3 +173,33 @@ async def decode_upload_file(file: UploadFile) -> str:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File must be UTF-8 encoded"
         )
+    
+
+async def get_recent_history_by_section(
+    db: AsyncSession,
+    section_ids: list[UUID],
+    hours: int = 24,
+) -> dict[UUID, EditHistory]:
+    if not section_ids:
+        return {}
+    
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    
+    result = await db.execute(
+        select(EditHistory)
+        .where(
+            EditHistory.section_id.in_(section_ids),
+            EditHistory.user_action.in_([UserAction.ACCEPTED, UserAction.REJECTED]),
+            EditHistory.created_at >= cutoff,
+        )
+        .order_by(EditHistory.created_at.desc())
+    )
+    
+    history_entries = result.scalars().all()
+  
+    history_by_section: dict[UUID, EditHistory] = {}
+    for entry in history_entries:
+        if entry.section_id and entry.section_id not in history_by_section:
+            history_by_section[entry.section_id] = entry
+    
+    return history_by_section

@@ -1,10 +1,3 @@
-"""
-Celery tasks for maintenance and synchronization.
-
-Handles scheduled jobs for health checks, integrity verification,
-and dependency rebuilding.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -37,7 +30,6 @@ logger = logging.getLogger(__name__)
     name="app.tasks.sync_tasks.rebuild_all_dependencies",
 )
 def rebuild_all_dependencies_task(self: Task) -> RebuildDependenciesResultDict:
-    """Rebuild the entire document dependency graph."""
     logger.info("Rebuilding all document dependencies")
 
     async def _rebuild() -> RebuildDependenciesResultDict:
@@ -58,7 +50,6 @@ def rebuild_all_dependencies_task(self: Task) -> RebuildDependenciesResultDict:
     name="app.tasks.sync_tasks.sync_chromadb",
 )
 def sync_chromadb_task(self: Task) -> SyncChromaDBResultDict:
-    """Sync all documents to ChromaDB, regenerating embeddings."""
     logger.info("Syncing all documents to ChromaDB")
 
     async def _sync() -> SyncChromaDBResultDict:
@@ -134,7 +125,6 @@ def sync_chromadb_task(self: Task) -> SyncChromaDBResultDict:
 
 @celery_app.task(name="app.tasks.sync_tasks.verify_chromadb_integrity")
 def verify_chromadb_integrity_task() -> VerifyIntegrityResultDict:
-    """Verify ChromaDB has embeddings for all document sections."""
     logger.info("Verifying ChromaDB integrity")
 
     async def _verify() -> VerifyIntegrityResultDict:
@@ -168,7 +158,6 @@ def verify_chromadb_integrity_task() -> VerifyIntegrityResultDict:
 
 @celery_app.task(name="app.tasks.sync_tasks.cleanup_orphaned_embeddings")
 def cleanup_orphaned_embeddings_task() -> CleanupOrphanedResultDict:
-    """Clean up embeddings in ChromaDB that no longer have corresponding sections."""
     logger.info("Cleaning up orphaned embeddings in ChromaDB")
 
     async def _cleanup() -> CleanupOrphanedResultDict:
@@ -194,17 +183,15 @@ def cleanup_orphaned_embeddings_task() -> CleanupOrphanedResultDict:
 
 @celery_app.task(name="app.tasks.sync_tasks.health_check")
 def health_check_task() -> HealthCheckResultDict:
-    """Perform system health check on all services."""
     logger.info("Performing system health check")
 
     async def _health_check() -> HealthCheckResultDict:
         services = ServiceHealthDict(
             database=False,
             chromadb=False,
-            redis=True,  # If this task runs, Redis is working
+            redis=True, 
         )
 
-        # Check database
         try:
             async with DBSessionContext() as db:
                 result = await db.execute(select(1))
@@ -212,7 +199,6 @@ def health_check_task() -> HealthCheckResultDict:
         except Exception as e:
             logger.error(f"Database health check failed: {e}")
 
-        # Check ChromaDB
         try:
             search_service = SearchService()
             await search_service.initialize()

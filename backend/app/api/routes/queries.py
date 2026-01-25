@@ -1,10 +1,3 @@
-"""
-Query API routes.
-
-Provides endpoints for creating, listing, and processing documentation
-update queries with real-time SSE streaming support.
-"""
-
 from __future__ import annotations
 
 import json
@@ -121,7 +114,7 @@ async def get_query(
     query_id: UUID,
     db: AsyncSession = Depends(get_db),
 ) -> QueryDetailResponse:
-    """Get detailed information about a specific query."""
+    
     query = await get_query_or_404(
         db,
         query_id,
@@ -210,14 +203,6 @@ async def process_query_stream(
     ),
     db: AsyncSession = Depends(get_db),
 ) -> EventSourceResponse:
-    """
-    Process a query and stream events via SSE.
-    
-    Args:
-        query_id: The query to process
-        use_celery: If True, dispatches to Celery and subscribes to Redis events.
-                   If False, processes directly in the request (simpler but blocks).
-    """
     query = await get_query_or_404(db, query_id)
 
     if query.status not in (QueryStatus.PENDING, QueryStatus.FAILED):
@@ -237,7 +222,6 @@ async def _stream_direct(
     query_text: str,
     db: AsyncSession,
 ) -> EventSourceResponse:
-    """Process directly and stream events."""
     publisher = DirectEventPublisher(query_id)
     emitter = EventEmitter(publisher, query_id)
 
@@ -274,7 +258,6 @@ async def _stream_from_celery(
     query_id: UUID,
     query_text: str,
 ) -> EventSourceResponse:
-    """Dispatch to Celery and stream events from Redis Stream."""
     
     subscriber = RedisEventSubscriber(query_id)
     
@@ -319,12 +302,6 @@ async def process_query_celery(
     query_id: UUID,
     db: AsyncSession = Depends(get_db),
 ) -> QueryProcessResponse:
-    """
-    Start processing a query via Celery (non-streaming).
-    
-    Use the task_id to poll for status, or use /process/stream?use_celery=true
-    for real-time SSE streaming.
-    """
     query = await get_query_or_404(db, query_id)
 
     if query.status not in (QueryStatus.PENDING, QueryStatus.FAILED):

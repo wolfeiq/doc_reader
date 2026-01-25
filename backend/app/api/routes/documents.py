@@ -5,16 +5,16 @@ from uuid import UUID
 from backend.app.api.utils.helper import (
     decode_upload_file, 
     get_document_or_404, 
-    get_pending_suggestions_by_section, 
+    get_pending_suggestions_by_section,
+    get_recent_history_by_section, 
     get_sections_or_404
 )
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
-from app.models.document import DocumentSection
-from app.models.document_base import Document
-from app.models.suggestion import EditSuggestion, SuggestionStatus
+from app.models.history import EditHistory, UserAction
 from app.schemas.document import (
     DocumentCreate,
     DocumentListResponse,
@@ -24,6 +24,7 @@ from app.schemas.document import (
     DependencyGraphResponse,
     ReindexResponse,
     SectionPreview,
+    ChangeType,
 )
 from app.services.dependency_service import DependencyService
 from app.services.document_service import DocumentService
@@ -151,31 +152,84 @@ async def get_document(
     )
 
 
+
 @router.get("/{document_id}/preview", response_model=DocumentPreviewResponse)
 async def preview_document(
     document_id: UUID, 
-    db: DBSession
+    db: DBSession,
+    include_history_hours: int = Query(
+        default=24, 
+        ge=0, 
+        le=168,  
+        description="Include accepted/rejected changes from the last N hours (0 to disable)"
+    ),
 ) -> DocumentPreviewResponse:
     doc = await get_document_or_404(db, document_id)
     section_ids = [s.id for s in doc.sections]
+
     pending_by_section = await get_pending_suggestions_by_section(db, section_ids)
+    
+    history_by_section: dict[UUID, EditHistory] = {}
+    if include_history_hours > 0:
+        history_by_section = await get_recent_history_by_section(
+            db, section_ids, hours=include_history_hours
+        )
 
     preview_sections: list[SectionPreview] = []
+    recent_change_count = 0
+    
     for section in sorted(doc.sections, key=lambda s: s.order):
         suggestion = pending_by_section.get(section.id)
-        preview_sections.append(
-            SectionPreview(
-                section_id=section.id,
-                section_title=section.section_title,
-                original_content=section.content,
-                preview_content=(
-                    suggestion.edited_text or suggestion.suggested_text 
-                    if suggestion else section.content
-                ),
-                suggestion_id=suggestion.id if suggestion else None,
-                confidence=suggestion.confidence if suggestion else None,
+        history = history_by_section.get(section.id)
+        
+        if suggestion:
+
+            preview_sections.append(
+                SectionPreview(
+                    section_id=section.id,
+                    section_title=section.section_title,
+                    original_content=section.content,
+                    preview_content=(
+                        suggestion.edited_text or suggestion.suggested_text
+                    ),
+                    suggestion_id=suggestion.id,
+                    confidence=suggestion.confidence,
+                    change_type=ChangeType.PENDING,
+                    changed_at=suggestion.created_at.isoformat() if suggestion.created_at else None,
+                )
             )
-        )
+        elif history:
+            recent_change_count += 1
+            change_type = (
+                ChangeType.ACCEPTED 
+                if history.user_action == UserAction.ACCEPTED 
+                else ChangeType.REJECTED
+            )
+            preview_sections.append(
+                SectionPreview(
+                    section_id=section.id,
+                    section_title=section.section_title,
+                    original_content=history.old_content,
+                    preview_content=history.new_content,
+                    suggestion_id=history.suggestion_id,
+                    history_id=history.id,
+                    confidence=None,
+                    change_type=change_type,
+                    changed_at=history.created_at.isoformat() if history.created_at else None,
+                )
+            )
+        else:
+            preview_sections.append(
+                SectionPreview(
+                    section_id=section.id,
+                    section_title=section.section_title,
+                    original_content=section.content,
+                    preview_content=section.content,
+                    suggestion_id=None,
+                    confidence=None,
+                    change_type=ChangeType.NONE,
+                )
+            )
 
     return DocumentPreviewResponse(
         id=doc.id,
@@ -184,6 +238,8 @@ async def preview_document(
         sections=preview_sections,
         has_pending_changes=bool(pending_by_section),
         pending_suggestion_count=len(pending_by_section),
+        has_recent_changes=recent_change_count > 0,
+        recent_change_count=recent_change_count,
     )
 
 

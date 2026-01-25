@@ -63,10 +63,69 @@ class DocumentService:
         current_start = 1
         current_level = 0
 
-        for i, line in enumerate(lines, start=1):
-            match = cls.HEADER_PATTERN.match(line)
+        in_code_block = False
+        in_html_block = False
+        in_table = False
+        in_blockquote = False
+        in_list = False
+        code_fence_marker = None  
+        html_tag_stack = []
 
-            if match:
+        for i, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            
+            if stripped.startswith("```") or stripped.startswith("~~~"):
+                if not in_code_block:
+                    in_code_block = True
+                    code_fence_marker = stripped[:3]
+                elif stripped.startswith(code_fence_marker):
+                    in_code_block = False
+                    code_fence_marker = None
+            
+            if not in_code_block:
+                opening_tags = re.findall(r'<(\w+)(?:\s|>)', stripped)
+                for tag in opening_tags:
+                    if tag.lower() in ['div', 'section', 'article', 'pre', 'table', 'ul', 'ol', 'blockquote']:
+                        html_tag_stack.append(tag.lower())
+                        in_html_block = True
+
+                closing_tags = re.findall(r'</(\w+)>', stripped)
+                for tag in closing_tags:
+                    if tag.lower() in html_tag_stack:
+                        html_tag_stack.remove(tag.lower())
+                
+                in_html_block = len(html_tag_stack) > 0
+
+            if not in_code_block and '|' in line and not in_html_block:
+                in_table = True
+            elif in_table and stripped and '|' not in line and not stripped.startswith('-'):
+                in_table = False
+            
+            if not in_code_block and stripped.startswith('>'):
+                in_blockquote = True
+            elif in_blockquote and stripped and not stripped.startswith('>'):
+                in_blockquote = False
+            
+            if not in_code_block and (
+                re.match(r'^[\*\-\+]\s', stripped) or
+                re.match(r'^\d+\.\s', stripped)
+            ):
+                in_list = True
+            elif in_list and stripped and not re.match(r'^[\*\-\+\d]', stripped):
+                if not line.startswith((' ', '\t')) and stripped:
+                    in_list = False
+
+            header_match = cls.HEADER_PATTERN.match(line)
+
+            in_any_block = (
+                in_code_block or 
+                in_html_block or 
+                in_table or 
+                in_blockquote or
+                in_list
+            )
+
+            if header_match and not in_any_block:
                 if current_lines or current_title:
                     sections.append(
                         ParsedSection(
@@ -77,9 +136,9 @@ class DocumentService:
                             level=current_level,
                         )
                     )
-
-                current_level = len(match.group(1))
-                current_title = match.group(2).strip()
+                
+                current_level = len(header_match.group(1))
+                current_title = header_match.group(2).strip()
                 current_lines = []
                 current_start = i
             else:

@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class UserAction(str, Enum):
-
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     EDITED = "edited"
@@ -16,14 +15,12 @@ class UserAction(str, Enum):
 
 
 class HistoryBase(BaseModel):
- 
     old_content: str
     new_content: str
     user_action: UserAction
 
 
 class HistoryCreate(HistoryBase):
-
     document_id: UUID
     section_id: UUID | None = None
     suggestion_id: UUID | None = None
@@ -33,7 +30,6 @@ class HistoryCreate(HistoryBase):
 
 
 class HistoryResponse(HistoryBase):
-
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -47,7 +43,6 @@ class HistoryResponse(HistoryBase):
 
 
 class HistoryListResponse(BaseModel):
-
     items: list[HistoryResponse]
     total: int = Field(ge=0)
     page: int = Field(ge=1)
@@ -56,7 +51,6 @@ class HistoryListResponse(BaseModel):
 
 
 class HistoryFilter(BaseModel):
-
     document_id: UUID | None = None
     section_id: UUID | None = None
     user_action: UserAction | None = None
@@ -65,7 +59,6 @@ class HistoryFilter(BaseModel):
 
 
 class HistoryStatsResponse(BaseModel):
-
     by_action: dict[str, int] = Field(default_factory=dict)
     total: int = Field(ge=0)
     last_7_days: int = Field(ge=0)

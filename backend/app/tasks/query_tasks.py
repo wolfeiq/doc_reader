@@ -1,14 +1,8 @@
-"""
-Celery tasks for query processing.
-
-These tasks use Redis pub/sub to emit events that can be consumed
-by SSE endpoints for real-time streaming.
-"""
-
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from celery import Task
@@ -25,8 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class QueryProcessingTask(Task):
-    """Base task class with failure handling for query processing."""
-
     def on_failure(
         self,
         exc: Exception,
@@ -52,10 +44,6 @@ class QueryProcessingTask(Task):
                 await db.commit()
 
 
-# Need this for type hint
-from typing import Any
-
-
 @celery_app.task(
     bind=True,
     base=QueryProcessingTask,
@@ -68,11 +56,6 @@ def process_query_async(
     query_id: str,
     query_text: str,
 ) -> QueryProcessResultDict:
-    """
-    Process a query asynchronously via Celery.
-    
-    Events are published to Redis pub/sub for SSE streaming.
-    """
     logger.info(f"Starting Celery processing for query {query_id}")
 
     async def _process() -> QueryProcessResultDict:
@@ -100,7 +83,6 @@ def process_query_async(
 
 @celery_app.task(name="app.tasks.query_tasks.cleanup_old_queries")
 def cleanup_old_queries(days_old: int = 30) -> CleanupResultDict:
-    """Clean up completed/failed queries older than specified days."""
     logger.info(f"Cleaning up queries older than {days_old} days")
 
     async def _cleanup() -> CleanupResultDict:
