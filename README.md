@@ -24,6 +24,7 @@ This is an AI agent platform designed to analyze technical documentation and pro
 - **Server State**: TanStack React Query (v5)
 - **Client State**: Zustand (with Persist middleware)
 - **Styling**: Tailwind CSS
+
 ---
 
 ## Architecture Flow
@@ -70,3 +71,6 @@ ToDo:
 - Phase 5-7: Advanced features (dependency visualization, preview mode) ✅
 - Preview Mode: YES, Dependency Vis: NO
 - Integration Tests, TypeSafety Needs to be Redone, Deployment
+
+
+![Screen](assets/screenshot.png)
