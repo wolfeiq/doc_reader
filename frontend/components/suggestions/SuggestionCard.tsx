@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, X, Pencil, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import Link from 'next/link';
+import { Check, X, Pencil, ChevronDown, ChevronUp, FileText, MessageSquare, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getConfidenceColor, getConfidenceBg, getStatusColor, getStatusBg } from '@/lib/utils';
 import { useSuggestionStore } from '@/stores';
-import { Button, Card, Badge } from '../ui';
+import { Button, Badge } from '../ui';
 import { DiffViewer } from './DiffViewer';
 import type { Suggestion } from '@/types';
 
@@ -23,7 +24,6 @@ export function SuggestionCard({ suggestion, onAccept, onReject, onSave, isLoadi
 
   const isSelected = selectedId === suggestion.id;
   const isEditing = editingId === suggestion.id;
-  // Make this check more flexible
   const isPending = suggestion.status?.toUpperCase() === 'PENDING' || suggestion.status === 'pending';
   const displayText = suggestion.edited_text || suggestion.suggested_text;
 
@@ -33,82 +33,153 @@ export function SuggestionCard({ suggestion, onAccept, onReject, onSave, isLoadi
   };
 
   return (
-    <Card
-      className={cn('transition-all', isSelected && 'ring-2 ring-primary-500', !isPending && 'opacity-75')}
+    <div
       onClick={() => setSelected(suggestion.id)}
+      className={cn(
+        'glass-panel rounded-3xl overflow-hidden transition-all duration-300 border mb-6',
+        isSelected ? 'border-primary-500/50 shadow-[0_0_30px_rgba(14,165,233,0.15)]' : 'border-white/10 shadow-2xl',
+        !isPending && 'opacity-60'
+      )}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 p-4 border-b">
-        <div className="flex items-center gap-2 min-w-0">
-          <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-          <span className="text-sm font-medium truncate">{suggestion.section_title || 'Untitled'}</span>
-          <span className="text-xs text-muted-foreground truncate">{suggestion.file_path}</span>
+      <div className="flex items-start justify-between gap-4 p-5 border-b border-white/5 bg-white/[0.02]">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10">
+            <FileText className="h-4 w-4 text-slate-400" />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm font-medium text-slate-100 truncate">
+              {suggestion.section_title || 'Untitled Section'}
+            </span>
+            
+            <div className="flex items-center gap-3 mt-0.5">
+              <Link 
+                href={`/documents/${suggestion.document_id}`}
+                onClick={(e) => e.stopPropagation()} // Prevent card selection when clicking link
+                className="text-[10px] uppercase tracking-widest text-slate-500 truncate font-bold hover:text-primary-400 transition-colors flex items-center gap-1"
+              >
+                {suggestion.file_path}
+                <ExternalLink className="h-2.5 w-2.5" />
+              </Link>
+
+              <Link
+                href={`/documents/${suggestion.document_id}`}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  "text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-md",
+                  "bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.4)]",
+                  "hover:bg-orange-400 hover:scale-105 transition-all animate-pulse"
+                )}
+              >
+                click here to see the changes in the whole doc!!!
+              </Link>
+            </div>
+          </div>
         </div>
+        
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Badge className={cn(getConfidenceBg(suggestion.confidence), getConfidenceColor(suggestion.confidence))}>
-            {Math.round(suggestion.confidence * 100)}%
+          <Badge className={cn(
+            'text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full border-none font-bold',
+            getConfidenceBg(suggestion.confidence), 
+            getConfidenceColor(suggestion.confidence)
+          )}>
+            {Math.round(suggestion.confidence * 100)}% Match
           </Badge>
           {!isPending && (
-            <Badge className={cn(getStatusBg(suggestion.status), getStatusColor(suggestion.status))}>
+            <Badge className={cn(
+              'text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full border-none font-bold',
+              getStatusBg(suggestion.status), 
+              getStatusColor(suggestion.status)
+            )}>
               {suggestion.status}
             </Badge>
           )}
         </div>
       </div>
 
-      {/* Diff */}
-      <div className="p-4">
+      <div className="p-6">
         {isEditing ? (
-          <div className="space-y-3">
+          <div className="space-y-4 animate-[slideUpFade_0.3s_ease_both]">
             <textarea
               value={editedText}
               onChange={(e) => setEditedText(e.target.value)}
-              className="w-full h-64 rounded-lg border bg-background px-3 py-2 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className={cn(
+                "w-full h-64 rounded-2xl bg-black/40 px-5 py-4 font-mono text-sm resize-none",
+                "text-slate-200 border border-white/10 focus:outline-none focus:ring-1 focus:ring-primary-500/50 transition-all shadow-inner"
+              )}
               autoFocus
             />
             <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={cancelEditing}>
-                <X className="h-4 w-4 mr-1" /> Cancel
+              <Button variant="ghost" size="sm" onClick={cancelEditing} className="rounded-full px-5 text-slate-400">
+                <X className="h-4 w-4 mr-1.5" /> Cancel
               </Button>
-              <Button size="sm" onClick={handleSave}>
-                <Check className="h-4 w-4 mr-1" /> Save
+              <Button size="sm" onClick={handleSave} className="rounded-full px-6 bg-primary-600 hover:bg-primary-500">
+                <Check className="h-4 w-4 mr-1.5" /> Save Changes
               </Button>
             </div>
           </div>
         ) : (
-          <DiffViewer original={suggestion.original_text} modified={displayText} />
+          <div className="rounded-2xl overflow-hidden border border-white/5 shadow-inner">
+            <DiffViewer original={suggestion.original_text} modified={displayText} />
+          </div>
         )}
       </div>
 
-      {/* Reasoning */}
-      <div className="border-t">
+      <div className="border-t border-white/5">
         <button
           onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-          className="flex items-center justify-between w-full px-4 py-2 text-sm text-muted-foreground hover:bg-muted/50"
+          className="flex items-center justify-between w-full px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500 hover:bg-white/[0.02] transition-colors"
         >
-          <span>Reasoning</span>
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-3.5 w-3.5" />
+            <span>AI Reasoning</span>
+          </div>
           {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
-        {isExpanded && <div className="px-4 pb-4 text-sm text-muted-foreground">{suggestion.reasoning}</div>}
+        {isExpanded && (
+          <div className="px-6 pb-6 text-sm text-slate-400 font-light leading-relaxed animate-[slideUpFade_0.3s_ease_both]">
+            {suggestion.reasoning}
+          </div>
+        )}
       </div>
 
-      {/* Actions - ALWAYS SHOW FOR DEBUGGING */}
-      <div className="flex justify-end gap-2 p-4 border-t bg-muted/30">
-        {/* Debug info */}
-        <span className="text-xs text-muted-foreground mr-auto">
-          Status: {suggestion.status} | isPending: {isPending.toString()} | isEditing: {isEditing.toString()}
-        </span>
+      <div className="flex items-center justify-between gap-2 p-5 border-t border-white/5 bg-black/10">
+        <div className="flex items-center gap-4">
+           <span className="text-[9px] uppercase tracking-[0.2em] text-slate-600 font-bold">
+            Status: {suggestion.status}
+          </span>
+        </div>
         
-        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); startEditing(suggestion.id, displayText); }} disabled={isLoading || !isPending}>
-          <Pencil className="h-4 w-4 mr-1" /> Edit
-        </Button>
-        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onReject(suggestion.id); }} disabled={isLoading || !isPending} className="text-red-600 hover:bg-red-50">
-          <X className="h-4 w-4 mr-1" /> Reject
-        </Button>
-        <Button size="sm" onClick={(e) => { e.stopPropagation(); onAccept(suggestion.id); }} disabled={isLoading || !isPending}>
-          <Check className="h-4 w-4 mr-1" /> Accept
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={(e) => { e.stopPropagation(); startEditing(suggestion.id, displayText); }} 
+            disabled={isLoading || !isPending}
+            className="rounded-full px-4 text-slate-400 hover:text-white hover:bg-white/5"
+          >
+            <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={(e) => { e.stopPropagation(); onReject(suggestion.id); }} 
+            disabled={isLoading || !isPending} 
+            className="rounded-full px-4 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 border-none"
+          >
+            <X className="h-3.5 w-3.5 mr-1.5" /> Reject
+          </Button>
+
+          <Button 
+            size="sm" 
+            onClick={(e) => { e.stopPropagation(); onAccept(suggestion.id); }} 
+            disabled={isLoading || !isPending}
+            className="rounded-full px-6 bg-primary-600 hover:bg-primary-500 shadow-lg shadow-primary-900/20"
+          >
+            <Check className="h-3.5 w-3.5 mr-1.5" /> Accept
+          </Button>
+        </div>
       </div>
-    </Card>
+    </div>
   );
 }

@@ -45,21 +45,6 @@ export function SuggestionList({ suggestions, onAccept, onReject, onSave, isLoad
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
-      <div className="flex items-center gap-6 text-sm">
-        <div><span className="font-medium">{stats.total}</span> <span className="text-muted-foreground">total</span></div>
-        <div className="flex items-center gap-2 text-yellow-600">
-          <AlertCircle className="h-4 w-4" /> {stats.pending} pending
-        </div>
-        <div className="flex items-center gap-2 text-green-600">
-          <CheckCircle className="h-4 w-4" /> {stats.accepted} accepted
-        </div>
-        <div className="flex items-center gap-2 text-red-600">
-          <XCircle className="h-4 w-4" /> {stats.rejected} rejected
-        </div>
-      </div>
-
-      {/* Grouped */}
       {Object.entries(grouped).map(([path, items]) => (
         <div key={path} className="space-y-3">
           <h3 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">

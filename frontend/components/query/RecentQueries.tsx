@@ -67,7 +67,7 @@ export function RecentQueries() {
             )}
           >
             <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{truncate(query.query_text, 50)}</p>
+              <p className="text-sm font-medium truncate">{truncate(query.query_text, 60)}</p>
               <div className="flex items-center gap-2 mt-1">
                 <Badge className={cn('text-xs', getStatusBg(query.status), getStatusColor(query.status))}>
                   {query.status}
@@ -82,7 +82,6 @@ export function RecentQueries() {
                 </span>
               </div>
             </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </Link>
         ))}
       </CardContent>

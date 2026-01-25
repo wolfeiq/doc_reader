@@ -299,6 +299,7 @@ class EventEmitter:
     async def suggestion(
         self,
         suggestion_id: str,
+        document_id: str,
         section_title: str | None,
         file_path: str,
         confidence: float,
@@ -307,6 +308,7 @@ class EventEmitter:
         await self.emit(
             EventType.SUGGESTION,
             suggestion_id=suggestion_id,
+            document_id=document_id,
             section_title=section_title,
             file_path=file_path,
             confidence=confidence,

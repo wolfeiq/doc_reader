@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryApi, suggestionApi, documentApi, historyApi } from '@/lib/api';
 import type { QueryCreate, SuggestionUpdate } from '@/types';
 
-// Query keys
 export const queryKeys = {
   queries: ['queries'] as const,
   query: (id: string) => ['queries', id] as const,
@@ -14,7 +13,6 @@ export const queryKeys = {
   history: ['history'] as const,
 };
 
-// Query hooks
 export function useQueries(params?: { skip?: number; limit?: number; status?: string }) {
   return useQuery({
     queryKey: [...queryKeys.queries, params],
@@ -50,7 +48,6 @@ export function useDeleteQuery() {
   });
 }
 
-// Document hooks
 export function useDocuments() {
   return useQuery({
     queryKey: queryKeys.documents,
@@ -74,7 +71,6 @@ export function useDocumentPreview(id: string) {
   });
 }
 
-// History hooks
 export function useHistory(params?: { limit?: number; action?: string }) {
   return useQuery({
     queryKey: [...queryKeys.history, params],

@@ -120,6 +120,7 @@ export function useQueryStream() {
                     cleanup();
                     queryClient.invalidateQueries({ queryKey: queryKeys.query(queryId) });
                     queryClient.invalidateQueries({ queryKey: queryKeys.queries });
+                    
                     return; // Exit the stream
 
                   case 'error':

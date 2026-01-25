@@ -40,7 +40,6 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   return response.json();
 }
 
-// Query API
 export const queryApi = {
   list: (params?: { skip?: number; limit?: number; status?: string }) => {
     const searchParams = new URLSearchParams();
@@ -63,7 +62,6 @@ export const queryApi = {
     fetchApi<void>(`/queries/${id}`, { method: 'DELETE' }),
 };
 
-// Suggestion API
 export const suggestionApi = {
   get: (id: string) => fetchApi<Suggestion>(`/suggestions/${id}`),
 
@@ -84,8 +82,6 @@ export const suggestionApi = {
     }),
 };
 
-// Document API
-
 
 export const documentApi = {
   list: (params?: { skip?: number; limit?: number }) => {
@@ -104,7 +100,7 @@ export const documentApi = {
     fetchApi<void>(`/documents/${id}`, { method: 'DELETE' }),
 };
 
-// History API
+
 export const historyApi = {
   list: (params?: {
     skip?: number;

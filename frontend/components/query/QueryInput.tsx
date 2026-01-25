@@ -9,6 +9,7 @@ const EXAMPLES = [
   'Update all references from "Runner" to "AgentRunner"',
   'Add deprecation notice to the old API endpoints',
   'Update code examples to use async/await syntax',
+  'Generate a quick start guide for new developers',
 ];
 
 interface QueryInputProps {
@@ -36,13 +37,13 @@ export function QueryInput({ onSubmit, isLoading }: QueryInputProps) {
           disabled={isLoading}
           rows={4}
           className={cn(
-            'w-full rounded-lg border bg-background px-4 py-3 text-sm',
-            'placeholder:text-muted-foreground resize-none',
+            'w-full rounded-lg border bg-background py-6 px-6 text-sm',
+            'placeholder:text-muted-foreground/60 resize-none',
             'focus:outline-none focus:ring-2 focus:ring-primary-500',
             'disabled:opacity-50'
           )}
         />
-        <div className="flex justify-end">
+        <div className="flex justify-center">
           <Button type="submit" disabled={!query.trim() || isLoading} isLoading={isLoading}>
             <Send className="mr-2 h-4 w-4" />
             Analyze
@@ -50,17 +51,20 @@ export function QueryInput({ onSubmit, isLoading }: QueryInputProps) {
         </div>
       </form>
 
-      <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">Try an example:</p>
-        <div className="flex flex-wrap gap-2">
+      <div className="space-y-3 px-4"> 
+        <span className="text-[9px] md:text-[10px] uppercase tracking-[0.2em] text-primary-400/60 font-bold block">
+          Try an Example
+        </span>
+        
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
           {EXAMPLES.map((example, i) => (
             <button
               key={i}
               onClick={() => setQuery(example)}
               disabled={isLoading}
-              className="rounded-full border px-3 py-1 text-xs hover:bg-accent disabled:opacity-50"
+              className="shrink-0 rounded-full border px-4 py-2 text-xs hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50 whitespace-nowrap"
             >
-              {example.length > 35 ? example.slice(0, 35) + '...' : example}
+              {example}
             </button>
           ))}
         </div>

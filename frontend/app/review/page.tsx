@@ -2,7 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Sparkles } from 'lucide-react';
 import { useQueryDetail, useAcceptSuggestion, useRejectSuggestion, useUpdateSuggestion } from '@/hooks';
 import { SuggestionList } from '@/components/suggestions';
 import { Button } from '@/components/ui';
@@ -18,27 +18,43 @@ export default function ReviewPage() {
 
   if (!queryId) {
     return (
-      <div className="max-w-4xl mx-auto text-center py-12">
-        <h2 className="text-xl font-medium">No query selected</h2>
-        <p className="text-muted-foreground mt-2">Start a new query or select one from recent queries.</p>
-        <Link href="/"><Button className="mt-4"><ArrowLeft className="h-4 w-4 mr-2" />Go to Query</Button></Link>
+      <div className="max-w-4xl mx-auto flex flex-col items-center justify-center py-24 text-center">
+        <div className="w-16 h-16 rounded-3xl bg-white/5 flex items-center justify-center mb-6 border border-white/10 shadow-2xl">
+          <Sparkles className="h-8 w-8 text-slate-700 opacity-50" />
+        </div>
+        <h2 className="text-2xl font-heading text-slate-100 mb-2">No Query Selected</h2>
+        <p className="text-slate-400 font-light max-w-xs mx-auto mb-8">
+          Start a new documentation analysis or select one from your history.
+        </p>
+        <Link href="/">
+          <Button variant="default" className="rounded-full px-8 py-6">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Go to Assistant
+          </Button>
+        </Link>
       </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center py-32 gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary-500/50" />
+        <p className="text-slate-500 font-light italic">Generating suggestions...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto text-center py-12">
-        <h2 className="text-xl font-medium text-red-600">Error loading query</h2>
-        <Link href="/"><Button className="mt-4" variant="outline"><ArrowLeft className="h-4 w-4 mr-2" />Go Back</Button></Link>
+      <div className="max-w-4xl mx-auto flex flex-col items-center justify-center py-24 text-center">
+        <h2 className="text-xl font-heading text-red-400 mb-6">Error loading analysis</h2>
+        <Link href="/">
+          <Button variant="outline" className="rounded-full px-8 py-6 border-white/10 hover:bg-white/5">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Go Back
+          </Button>
+        </Link>
       </div>
     );
   }
@@ -46,22 +62,37 @@ export default function ReviewPage() {
   const isActionLoading = acceptMutation.isPending || rejectMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <Link href="/" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-2">
-          <ArrowLeft className="h-4 w-4" /> Back to Query
+    <div className="max-w-5xl mx-auto space-y-10 py-10 px-4">
+      <div className="text-center space-y-4 animate-[slideUpFade_0.6s_ease_both]">
+        <Link 
+          href="/" 
+          className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-primary-400 transition-colors mb-2"
+        >
+          <ArrowLeft className="h-3 w-3" /> Back to Analysis
         </Link>
-        <h1 className="text-2xl font-bold">Review Suggestions</h1>
-        <p className="text-muted-foreground mt-1 truncate">{query?.query_text}</p>
+        
+        <h1 className="text-slate-100 flex items-center justify-center gap-3">
+          Review Suggestions
+        </h1>
+        
+        {query?.query_text && (
+          <div className="glass-panel inline-block px-6 py-3 rounded-2xl border border-white/5 shadow-xl">
+             <p className="text-sm text-slate-400 font-light italic leading-relaxed">
+              &quot;{query.query_text}&quot;
+            </p>
+          </div>
+        )}
       </div>
 
-      <SuggestionList
-        suggestions={query?.suggestions || []}
-        onAccept={(id) => acceptMutation.mutate(id)}
-        onReject={(id) => rejectMutation.mutate(id)}
-        onSave={(id, text) => updateMutation.mutate({ id, data: { edited_text: text } })}
-        isLoading={isActionLoading}
-      />
+      <div className="animate-[slideUpFade_0.8s_ease_both] delay-200">
+        <SuggestionList
+          suggestions={query?.suggestions || []}
+          onAccept={(id) => acceptMutation.mutate(id)}
+          onReject={(id) => rejectMutation.mutate(id)}
+          onSave={(id, text) => updateMutation.mutate({ id, data: { edited_text: text } })}
+          isLoading={isActionLoading}
+        />
+      </div>
     </div>
   );
 }

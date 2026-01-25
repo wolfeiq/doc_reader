@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from backend.app.ai.tool_executor import AgentState, ToolExecutor
+from app.ai.tool_executor import AgentState, ToolExecutor
 from openai import AsyncOpenAI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,7 @@ from app.ai.tools import TOOLS
 from app.config import settings
 from app.models.query import Query, QueryStatus
 from app.services.event_service import EventEmitter
-from backend.app.schemas.tool_schemas import ProcessResult
+from app.schemas.tool_schemas import ProcessResult
 
 if TYPE_CHECKING:
     from openai.types.chat import ChatCompletionMessage
@@ -105,7 +105,7 @@ class QueryOrchestrator:
                     state.messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
-                        "content": json.dumps(tool_result),
+                        "content": json.dumps(tool_result.model_dump())
                     })
 
             await self.db.commit()

@@ -34,6 +34,7 @@ async def get_suggestion(
         id=suggestion.id,
         query_id=suggestion.query_id,
         section_id=suggestion.section_id,
+        document_id=suggestion.document_id,
         original_text=suggestion.original_text,
         suggested_text=suggestion.suggested_text,
         reasoning=suggestion.reasoning,
@@ -74,6 +75,7 @@ async def update_suggestion(
     return SuggestionResponse(
         id=suggestion.id,
         query_id=suggestion.query_id,
+        document_id=suggestion.document_id,
         section_id=suggestion.section_id,
         original_text=suggestion.original_text,
         suggested_text=suggestion.suggested_text,
@@ -174,7 +176,7 @@ async def reject_suggestion(
         section_id=suggestion.section_id,
         suggestion_id=suggestion.id,
         old_content=suggestion.original_text,
-        new_content=suggestion.original_text,  # No change
+        new_content=suggestion.original_text,
         user_action=UserAction.REJECTED,
         query_text=suggestion.query.query_text if suggestion.query else None,
         file_path=(

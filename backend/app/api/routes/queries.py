@@ -129,6 +129,7 @@ async def get_query(
         SuggestionResponse(
             id=s.id,
             query_id=s.query_id,
+            document_id=s.document_id,
             section_id=s.section_id,
             original_text=s.original_text,
             suggested_text=s.suggested_text,

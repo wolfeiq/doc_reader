@@ -15,7 +15,6 @@ export function StreamingProgress() {
 
   return (
     <Card>
-      {/* Status header */}
       <div className="flex items-center gap-3 border-b p-4">
         {streamingStatus === 'streaming' && (
           <Loader2 className="h-5 w-5 text-primary-500 animate-spin" />
@@ -39,7 +38,6 @@ export function StreamingProgress() {
       </div>
 
       <div className="p-4 space-y-3">
-        {/* Stats */}
         <div className="flex gap-4 text-sm">
           <div className="flex items-center gap-2">
             <Search className="h-4 w-4 text-muted-foreground" />
@@ -72,7 +70,6 @@ export function StreamingProgress() {
           </div>
         )}
 
-        {/* Incoming suggestions */}
         {incomingSuggestions.length > 0 && (
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase">Found</p>

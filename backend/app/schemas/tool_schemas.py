@@ -1,6 +1,6 @@
 from __future__ import annotations
 from uuid import UUID
-from typing import Any, Literal, Union, TypedDict
+from typing import Any, Literal, Optional, Union, TypedDict
 from pydantic import BaseModel, Field, ConfigDict
 
 model_config = ConfigDict(from_attributes=True)
@@ -8,9 +8,10 @@ model_config = ConfigDict(from_attributes=True)
 
 class SearchResultItem(BaseModel):
     section_id: str
+    document_id: str | None = None 
     section_title: str | None = None
-    file_path: str
-    content_preview: str
+    file_path: Optional[str] = None
+    content_preview: Optional[str] = None 
     score: float = Field(ge=0.0, le=1.0)
 
 class DependencyInfo(BaseModel):
@@ -23,7 +24,6 @@ class DocumentStructureSection(BaseModel):
     section_id: str
     title: str | None = None
     order: int = Field(ge=0)
-
 
 class SemanticSearchArgs(BaseModel):
     query: str = Field(..., min_length=1, max_length=5000)
@@ -49,6 +49,7 @@ class GetDocumentStructureArgs(BaseModel):
 class SearchByFilePathArgs(BaseModel):
     path_pattern: str = Field(..., min_length=1)
 
+
 class SearchResult(BaseModel):
     results: list[SearchResultItem]
     count: int
@@ -64,11 +65,12 @@ class SectionResult(BaseModel):
 
 class DependencyResult(BaseModel):
     section_id: str
-    dependencies: list[dict[str, Any]] 
+    dependencies: list[dict[str, Any]]
 
 class ProposeEditResult(BaseModel):
     success: bool = True
     suggestion_id: str | None = None
+    document_id: str | None = None
     section_id: str
     section_title: str | None = None
     file_path: str | None = None
@@ -89,7 +91,6 @@ class FilePathSearchResult(BaseModel):
 
 class ToolError(BaseModel):
     error: str
-
 
 class AgentStats(TypedDict):
     searches_performed: int

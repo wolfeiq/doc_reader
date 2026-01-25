@@ -30,6 +30,7 @@ class SuggestionResponse(SuggestionBase):
 
     id: UUID
     query_id: UUID
+    document_id: UUID | None = None
     section_id: UUID
     status: SuggestionStatus
     edited_text: str | None = None

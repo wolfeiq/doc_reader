@@ -1,4 +1,4 @@
-// Query types
+
 export type QueryStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
 export interface Query {
@@ -21,7 +21,6 @@ export interface QueryCreate {
   query_text: string;
 }
 
-// Suggestion types
 export type SuggestionStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EDITED';
 
 export interface Suggestion {
@@ -52,7 +51,6 @@ export interface SuggestionActionResponse {
   message: string;
 }
 
-// Document types
 export interface Document {
   id: string;
   file_path: string;
@@ -78,7 +76,7 @@ export interface DocumentSection {
   section_id: string;
   section_title: string;
   original_content: string;
-  preview_content: string;  // This is the current/modified content
+  preview_content: string; 
   suggestion_id: string | null;
   confidence: number | null;
 }
@@ -101,9 +99,6 @@ export interface SectionPreview {
   confidence: number | null;
 }
 
-
-
-// History types
 export type UserAction = 'ACCEPTED' | 'REJECTED' | 'EDITED' | 'REVERTED';
 
 export interface EditHistory {
@@ -120,7 +115,6 @@ export interface EditHistory {
   created_at: string;
 }
 
-// SSE Event types
 export interface SSESuggestionEvent {
   suggestion_id: string;
   section_title: string | null;

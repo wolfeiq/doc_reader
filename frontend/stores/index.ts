@@ -4,10 +4,6 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SSESuggestionEvent, SSECompletedEvent } from '@/types';
 
-// =============================================================================
-// UI Store - Theme, Sidebar, Modals
-// =============================================================================
-
 interface UIState {
   theme: 'light' | 'dark' | 'system';
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -42,9 +38,6 @@ export const useUIStore = create<UIState>()(
   )
 );
 
-// =============================================================================
-// Query Store - Streaming State
-// =============================================================================
 
 export type StreamingStatus = 'idle' | 'connecting' | 'streaming' | 'completed' | 'error';
 
@@ -138,9 +131,6 @@ export const useQueryStore = create<QueryState>((set) => ({
     }),
 }));
 
-// =============================================================================
-// Suggestion Store - Selection & Editing
-// =============================================================================
 
 interface SuggestionState {
   selectedId: string | null;

@@ -1,32 +1,66 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+'use client'; // We need this for the mobile toggle state
+
+import { useState } from 'react';
 import './globals.css';
 import { Providers } from '@/components/Providers';
 import { Sidebar } from '@/components/layout';
+import GlobalFlashlight from '@/components/GlobalFlashlight';
 import { cn } from '@/lib/utils';
+import { Inter, Libre_Baskerville } from 'next/font/google';
+import { Menu, X } from 'lucide-react'; // For the mobile toggle
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const libreBaskerville = Libre_Baskerville({
+  weight: ['400', '700'],
+  subsets: ['latin'],
+  variable: '--font-libre',
+});
 
-export const metadata: Metadata = {
-  title: 'Pluno - Documentation Update Assistant',
-  description: 'AI-powered documentation update suggestions',
-};
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={cn(inter.className, 'min-h-screen bg-background')}>
+    <html lang="en" className={`${inter.variable} ${libreBaskerville.variable}`} suppressHydrationWarning>
+      <body className={cn(inter.className, 'min-h-screen antialiased text-white selection:bg-white/20 bg-black')}>
         <Providers>
-          <Sidebar />
-          <main className="ml-64 min-h-screen transition-all duration-300">
-            <div className="container mx-auto p-6">
-              {children}
-            </div>
-          </main>
+          <GlobalFlashlight />
+          
+          {/* Mobile Floating "Toast" Trigger */}
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="md:hidden fixed bottom-6 right-6 z-[60] p-4 rounded-full bg-primary-600 text-white shadow-2xl border border-primary-400/20 animate-glow"
+          >
+            {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+
+          <div className="relative flex min-h-screen">
+            {/* Sidebar with Mobile "Toast" Logic */}
+            <Sidebar 
+              className={cn(
+                // Desktop: Fixed sidebar
+                "fixed inset-y-0 left-0 z-50 w-64 border-r border-white/10 bg-black/40 backdrop-blur-xl transition-transform duration-300 md:translate-x-0",
+                // Mobile: Slides up like a toast or in from the side
+                isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+              )} 
+            />
+
+            {/* Backdrop for mobile when sidebar is open */}
+            {isSidebarOpen && (
+              <div 
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+                onClick={() => setIsSidebarOpen(false)}
+              />
+            )}
+
+            <main className={cn(
+              "flex-1 w-full min-h-screen transition-all duration-300",
+              "md:ml-64" // Only offset content on desktop
+            )}>
+              <div className="container mx-auto p-4 md:p-8">
+                {children}
+              </div>
+            </main>
+          </div>
         </Providers>
       </body>
     </html>
