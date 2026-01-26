@@ -60,25 +60,21 @@ export function useQueryStream() {
           const { done, value } = await reader.read();
           
           if (done) {
-            console.log('🔵 Stream completed');
+            console.log('Stream completed');
             break;
           }
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           
-          // Keep the last incomplete line in the buffer
           buffer = lines.pop() || '';
 
           for (const line of lines) {
-            console.log('🟡 Received line:', line);
 
-            // Skip empty lines and comments
             if (!line.trim() || line.startsWith(':')) continue;
 
             if (line.startsWith('event:')) {
               currentEvent = line.slice(6).trim();
-              console.log('🟢 Event type:', currentEvent);
               continue;
             }
 
@@ -87,9 +83,8 @@ export function useQueryStream() {
               
               try {
                 const data = JSON.parse(dataStr);
-                console.log('🟢 Parsed data:', currentEvent, data);
+                console.log('Parsed data:', currentEvent, data);
                 
-                // Handle different event types
                 switch (currentEvent) {
                   case 'task_started':
                     if (data.task_id) {
@@ -115,13 +110,13 @@ export function useQueryStream() {
                     break;
 
                   case 'completed':
-                    console.log('🎉 Stream completed with data:', data);
+                    console.log('Stream completed with data:', data);
                     setCompleted(data as SSECompletedEvent);
                     cleanup();
                     queryClient.invalidateQueries({ queryKey: queryKeys.query(queryId) });
                     queryClient.invalidateQueries({ queryKey: queryKeys.queries });
                     
-                    return; // Exit the stream
+                    return;
 
                   case 'error':
                     setError(data.error || 'An error occurred');
@@ -129,20 +124,19 @@ export function useQueryStream() {
                     return;
 
                   default:
-                    console.warn('🟡 Unknown event type:', currentEvent, data);
+                    console.warn('Unknown event type:', currentEvent, data);
                 }
 
-                // Reset event type after processing
                 currentEvent = '';
               } catch (e) {
-                console.error('🔴 Error parsing SSE data:', e, dataStr);
+                console.error('Error parsing SSE data:', e, dataStr);
               }
             }
           }
         }
       } catch (error: any) {
         if (error.name !== 'AbortError') {
-          console.error('🔴 Stream error:', error);
+          console.error('Stream error:', error);
           setError(error.message || 'Connection failed');
         }
         cleanup();

@@ -32,11 +32,9 @@ const ClientMarkdown: React.FC<ClientMarkdownProps> = ({ content }) => {
             <p className="my-2 leading-tight text-slate-400 [overflow-wrap:anywhere] break-words" {...props} />
           ),
 
-          // LIST FIX: Tightened spacing and absolute bullet positioning
           ul: ({ ...props }) => <ul className="list-none space-y-1 my-2" {...props} />,
           li: ({ children, ...props }) => (
             <li className="relative pl-5 text-slate-400 leading-tight text-sm" {...props}>
-              {/* This bullet is now absolute positioned to stay at the top of the first line */}
               <span className="absolute left-0 top-[0.5em] w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
               <span className="block">{children}</span>
             </li>

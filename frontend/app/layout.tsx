@@ -1,4 +1,4 @@
-'use client'; // We need this for the mobile toggle state
+'use client';
 
 import { useState } from 'react';
 import './globals.css';
@@ -7,7 +7,7 @@ import { Sidebar } from '@/components/layout';
 import GlobalFlashlight from '@/components/GlobalFlashlight';
 import { cn } from '@/lib/utils';
 import { Inter, Libre_Baskerville } from 'next/font/google';
-import { Menu, X } from 'lucide-react'; // For the mobile toggle
+import { Menu, X } from 'lucide-react'; 
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const libreBaskerville = Libre_Baskerville({
@@ -24,8 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={cn(inter.className, 'min-h-screen antialiased text-white selection:bg-white/20 bg-black')}>
         <Providers>
           <GlobalFlashlight />
-          
-          {/* Mobile Floating "Toast" Trigger */}
+  
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="md:hidden fixed bottom-6 right-6 z-[60] p-4 rounded-full bg-primary-600 text-white shadow-2xl border border-primary-400/20 animate-glow"
@@ -34,17 +33,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </button>
 
           <div className="relative flex min-h-screen">
-            {/* Sidebar with Mobile "Toast" Logic */}
             <Sidebar 
               className={cn(
-                // Desktop: Fixed sidebar
                 "fixed inset-y-0 left-0 z-50 w-64 border-r border-white/10 bg-black/40 backdrop-blur-xl transition-transform duration-300 md:translate-x-0",
-                // Mobile: Slides up like a toast or in from the side
                 isSidebarOpen ? "translate-x-0" : "-translate-x-full"
               )} 
             />
 
-            {/* Backdrop for mobile when sidebar is open */}
             {isSidebarOpen && (
               <div 
                 className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
@@ -54,7 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
             <main className={cn(
               "flex-1 w-full min-h-screen transition-all duration-300",
-              "md:ml-64" // Only offset content on desktop
+              "md:ml-64"
             )}>
               <div className="container mx-auto p-4 md:p-8">
                 {children}

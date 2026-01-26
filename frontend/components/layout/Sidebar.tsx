@@ -6,6 +6,7 @@ import { MessageSquare, FileCheck, FolderOpen, History, ChevronLeft } from 'luci
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores';
 import { Button } from '../ui';
+import type { SidebarProps } from '@/types';
 
 const navItems = [
   { href: '/', icon: MessageSquare, label: 'Query' },
@@ -13,9 +14,6 @@ const navItems = [
   { href: '/history', icon: History, label: 'History' },
 ];
 
-interface SidebarProps {
-  className?: string;
-}
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname();

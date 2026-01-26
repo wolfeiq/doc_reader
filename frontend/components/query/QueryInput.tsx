@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from '../ui';
 import { cn } from '@/lib/utils';
+import type { QueryInputProps } from '@/types';
 
 const EXAMPLES = [
   'Update all references from "Runner" to "AgentRunner"',
@@ -11,11 +12,6 @@ const EXAMPLES = [
   'Update code examples to use async/await syntax',
   'Generate a quick start guide for new developers',
 ];
-
-interface QueryInputProps {
-  onSubmit: (query: string) => void;
-  isLoading?: boolean;
-}
 
 export function QueryInput({ onSubmit, isLoading }: QueryInputProps) {
   const [query, setQuery] = useState('');

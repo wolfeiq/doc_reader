@@ -129,3 +129,32 @@ export interface SSECompletedEvent {
 }
 
 
+export interface SidebarProps {
+  className?: string;
+}
+
+export interface QueryInputProps {
+  onSubmit: (query: string) => void;
+  isLoading?: boolean;
+}
+
+export interface DiffViewerProps {
+  original: string;
+  modified: string;
+}
+
+export interface SuggestionCardProps {
+  suggestion: Suggestion;
+  onAccept: (id: string) => void;
+  onReject: (id: string) => void;
+  onSave: (id: string, text: string) => void;
+  isLoading?: boolean;
+}
+
+export interface SuggestionListProps {
+  suggestions: Suggestion[];
+  onAccept: (id: string) => void;
+  onReject: (id: string) => void;
+  onSave: (id: string, text: string) => void;
+  isLoading?: boolean;
+}

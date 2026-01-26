@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     
 
     database_url: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5434/pluno",
+        default="postgresql+asyncpg://postgres:postgres@postgres:5432/pluno",
         description="PostgreSQL connection string",
     )
 

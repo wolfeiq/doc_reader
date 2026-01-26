@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 from uuid import UUID
-from backend.app.api.utils.helper import (
+from app.api.utils.helper import (
     decode_upload_file, 
     get_document_or_404, 
     get_pending_suggestions_by_section,

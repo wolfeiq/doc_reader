@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from uuid import UUID
-from backend.app.api.utils.helper import get_history_or_404, list_history_entries
+from app.api.utils.helper import get_history_or_404, list_history_entries
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func, Row
 from sqlalchemy.ext.asyncio import AsyncSession

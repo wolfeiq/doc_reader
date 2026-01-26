@@ -8,15 +8,7 @@ import { getConfidenceColor, getConfidenceBg, getStatusColor, getStatusBg } from
 import { useSuggestionStore } from '@/stores';
 import { Button, Badge } from '../ui';
 import { DiffViewer } from './DiffViewer';
-import type { Suggestion } from '@/types';
-
-interface SuggestionCardProps {
-  suggestion: Suggestion;
-  onAccept: (id: string) => void;
-  onReject: (id: string) => void;
-  onSave: (id: string, text: string) => void;
-  isLoading?: boolean;
-}
+import type { SuggestionCardProps } from '@/types';
 
 export function SuggestionCard({ suggestion, onAccept, onReject, onSave, isLoading }: SuggestionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);

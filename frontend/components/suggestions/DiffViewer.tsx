@@ -6,11 +6,8 @@ import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores';
 import { Button } from '../ui';
 import { Columns2, Rows3 } from 'lucide-react';
+import type { DiffViewerProps } from '@/types';
 
-interface DiffViewerProps {
-  original: string;
-  modified: string;
-}
 
 export function DiffViewer({ original, modified }: DiffViewerProps) {
   const { diffMode, setDiffMode } = useUIStore();
