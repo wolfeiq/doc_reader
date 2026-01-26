@@ -1,25 +1,12 @@
 'use client';
 
 import { useMemo } from 'react';
-import { FileText, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { SuggestionCard } from './SuggestionCard';
-import type { Suggestion } from '@/types';
+import type { Suggestion, SuggestionListProps } from '@/types';
 
-interface SuggestionListProps {
-  suggestions: Suggestion[];
-  onAccept: (id: string) => void;
-  onReject: (id: string) => void;
-  onSave: (id: string, text: string) => void;
-  isLoading?: boolean;
-}
 
 export function SuggestionList({ suggestions, onAccept, onReject, onSave, isLoading }: SuggestionListProps) {
-  const stats = useMemo(() => ({
-    total: suggestions.length,
-    pending: suggestions.filter((s) => s.status === 'PENDING').length,
-    accepted: suggestions.filter((s) => s.status === 'ACCEPTED').length,
-    rejected: suggestions.filter((s) => s.status === 'REJECTED').length,
-  }), [suggestions]);
 
   const grouped = useMemo(() => {
     const groups: Record<string, Suggestion[]> = {};

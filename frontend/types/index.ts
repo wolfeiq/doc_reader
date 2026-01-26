@@ -158,3 +158,36 @@ export interface SuggestionListProps {
   onSave: (id: string, text: string) => void;
   isLoading?: boolean;
 }
+
+export type ChangeType = 'none' | 'pending' | 'accepted' | 'rejected';
+
+export interface Section {
+  section_id: string;
+  section_title: string;
+  original_content: string;
+  preview_content: string;
+  suggestion_id: string | null;
+  history_id: string | null;
+  confidence: number | null;
+  change_type: ChangeType;
+  changed_at: string | null;
+  order: number;
+  start_line: number;
+  end_line: number;
+}
+
+export interface DiffSegment {
+  type: 'unchanged' | 'added' | 'removed';
+  text: string;
+}
+
+export interface DocumentPreviewUnique {
+  id: string;
+  file_path: string;
+  title: string;
+  sections: Section[];
+  has_pending_changes: boolean;
+  pending_suggestion_count: number;
+  has_recent_changes: boolean;
+  recent_change_count: number;
+}

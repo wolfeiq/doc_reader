@@ -16,7 +16,7 @@ export function SuggestionCard({ suggestion, onAccept, onReject, onSave, isLoadi
 
   const isSelected = selectedId === suggestion.id;
   const isEditing = editingId === suggestion.id;
-  const isPending = suggestion.status?.toUpperCase() === 'PENDING' || suggestion.status === 'pending';
+  const isPending = suggestion.status?.toUpperCase() === 'PENDING';
   const displayText = suggestion.edited_text || suggestion.suggested_text;
 
   const handleSave = () => {

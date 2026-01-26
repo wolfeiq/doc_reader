@@ -4,7 +4,7 @@ import { useState } from 'react';
 import './globals.css';
 import { Providers } from '@/components/Providers';
 import { Sidebar } from '@/components/layout';
-import GlobalFlashlight from '@/components/GlobalFlashlight';
+import GlobalFlashlight from '@/components/ui/GlobalFlashlight';
 import { cn } from '@/lib/utils';
 import { Inter, Libre_Baskerville } from 'next/font/google';
 import { Menu, X } from 'lucide-react'; 

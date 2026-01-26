@@ -16,7 +16,7 @@ This document tracks decisions made for speed vs. what would be done in producti
 - ✅ **Semantic search** - Finding relevant sections based on meaning, not just keywords
 
 ### API
-- ✅ **SSE streaming** - Real-time progress updates
+- ✅ **SSE streaming** - Real-time progress updates with Celery
 - ✅ **Proper error handling** - HTTP status codes and error messages
 - ✅ **Pagination** - For list endpoints
 - ✅ **Type validation** - Pydantic schemas for all endpoints

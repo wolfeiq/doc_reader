@@ -10,10 +10,13 @@ import type {
   EditHistory,
 } from '@/types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -40,14 +43,21 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   return response.json();
 }
 
+function buildQueryString(params: Record<string, string | number | undefined>): string {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) {
+      searchParams.set(key, String(value));
+    }
+  });
+  const query = searchParams.toString();
+  return query ? `?${query}` : '';
+}
+
 export const queryApi = {
   list: (params?: { skip?: number; limit?: number; status?: string }) => {
-    const searchParams = new URLSearchParams();
-    if (params?.skip) searchParams.set('skip', String(params.skip));
-    if (params?.limit) searchParams.set('limit', String(params.limit));
-    if (params?.status) searchParams.set('status', params.status);
-    const query = searchParams.toString();
-    return fetchApi<Query[]>(`/queries/${query ? `?${query}` : ''}`);
+    const query = buildQueryString(params || {});
+    return fetchApi<Query[]>(`/queries${query}`);
   },
 
   get: (id: string) => fetchApi<QueryDetail>(`/queries/${id}`),
@@ -60,6 +70,19 @@ export const queryApi = {
 
   delete: (id: string) =>
     fetchApi<void>(`/queries/${id}`, { method: 'DELETE' }),
+
+  processStream: (id: string, signal: AbortSignal, useCelery = true) => {
+    const query = buildQueryString({ 
+      use_celery: useCelery ? 'true' : undefined 
+    });
+    return fetch(`${API_BASE}/queries/${id}/process/stream${query}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal,
+    });
+  },
 };
 
 export const suggestionApi = {
@@ -82,24 +105,19 @@ export const suggestionApi = {
     }),
 };
 
-
 export const documentApi = {
   list: (params?: { skip?: number; limit?: number }) => {
-    const searchParams = new URLSearchParams();
-    if (params?.skip) searchParams.set('skip', String(params.skip));
-    if (params?.limit) searchParams.set('limit', String(params.limit));
-    const query = searchParams.toString();
-    return fetchApi<DocumentListItem[]>(`/documents/${query ? `?${query}` : ''}`);
+    const query = buildQueryString(params || {});
+    return fetchApi<DocumentListItem[]>(`/documents${query}`);
   },
 
-  get: (id: string) => fetchApi<Document>(`/documents/${id}`), // Add this line
+  get: (id: string) => fetchApi<Document>(`/documents/${id}`),
 
   preview: (id: string) => fetchApi<DocumentPreview>(`/documents/${id}/preview`),
 
   delete: (id: string) =>
     fetchApi<void>(`/documents/${id}`, { method: 'DELETE' }),
 };
-
 
 export const historyApi = {
   list: (params?: {
@@ -108,15 +126,9 @@ export const historyApi = {
     document_id?: string;
     action?: string;
   }) => {
-    const searchParams = new URLSearchParams();
-    if (params?.skip) searchParams.set('skip', String(params.skip));
-    if (params?.limit) searchParams.set('limit', String(params.limit));
-    if (params?.document_id) searchParams.set('document_id', params.document_id);
-    if (params?.action) searchParams.set('action', params.action);
-    const query = searchParams.toString();
-    return fetchApi<EditHistory[]>(`/history/${query ? `?${query}` : ''}`);
+    const query = buildQueryString(params || {});
+    return fetchApi<EditHistory[]>(`/history${query}`);
   },
 };
-
 
 export { ApiError };

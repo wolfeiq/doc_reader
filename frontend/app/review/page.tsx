@@ -10,7 +10,6 @@ import { Button } from '@/components/ui';
 export default function ReviewPage() {
   const searchParams = useSearchParams();
   const queryId = searchParams.get('query');
-
   const { data: query, isLoading, error } = useQueryDetail(queryId || '');
   const acceptMutation = useAcceptSuggestion();
   const rejectMutation = useRejectSuggestion();

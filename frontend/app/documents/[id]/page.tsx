@@ -2,109 +2,17 @@
 
 import React, { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, AlertCircle, ChevronRight, Check, X } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, Check } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
 import { documentApi } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import type { Section, DocumentPreviewUnique} from '@/types';
+import { FilterBtn } from '@/components/ui/FilterBtn';
+import { SectionListItem } from '@/components/ui/SectionListItem';
+import { DiffHeader } from '@/components/ui/DiffHeader';
+import { DiffViewer } from '@/components/ui/DiffViewer';
 
-const MarkdownRenderer = dynamic(() => import('@/components/ClientMarkdown'), { ssr: false });
-
-
-type ChangeType = 'none' | 'pending' | 'accepted' | 'rejected';
-
-interface Section {
-  section_id: string;
-  section_title: string;
-  original_content: string;
-  preview_content: string;
-  suggestion_id: string | null;
-  history_id: string | null;
-  confidence: number | null;
-  change_type: ChangeType;
-  changed_at: string | null;
-  order: number;
-  start_line: number;
-  end_line: number;
-}
-
-interface DocumentPreview {
-  id: string;
-  file_path: string;
-  title: string;
-  sections: Section[];
-  has_pending_changes: boolean;
-  pending_suggestion_count: number;
-  has_recent_changes: boolean;
-  recent_change_count: number;
-}
-
-interface DiffSegment {
-  type: 'unchanged' | 'added' | 'removed';
-  text: string;
-}
-
-
-function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${diffDays}d ago`;
-}
-
-function computeWordDiff(original: string, modified: string): DiffSegment[] {
-  if (original === modified) {
-    return [{ type: 'unchanged', text: original }];
-  }
-  const originalWords = original.split(/(\s+)/);
-  const modifiedWords = modified.split(/(\s+)/);
-  const m = originalWords.length;
-  const n = modifiedWords.length;
-  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (originalWords[i - 1] === modifiedWords[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-      }
-    }
-  }
-
-  let i = m, j = n;
-  const result: DiffSegment[] = [];
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && originalWords[i - 1] === modifiedWords[j - 1]) {
-      result.unshift({ type: 'unchanged', text: originalWords[i - 1] });
-      i--; j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      result.unshift({ type: 'added', text: modifiedWords[j - 1] });
-      j--;
-    } else {
-      result.unshift({ type: 'removed', text: originalWords[i - 1] });
-      i--;
-    }
-  }
-
-  const merged: DiffSegment[] = [];
-  for (const seg of result) {
-    if (merged.length > 0 && merged[merged.length - 1].type === seg.type) {
-      merged[merged.length - 1].text += seg.text;
-    } else {
-      merged.push({ ...seg });
-    }
-  }
-  return merged;
-}
-
+const MarkdownRenderer = dynamic(() => import('@/components/ui/ClientMarkdown'), { ssr: false });
 
 export default function DocumentDetailPage() {
   const params = useParams();
@@ -117,7 +25,7 @@ export default function DocumentDetailPage() {
     enabled: !!documentId,
   });
 
-  const { data: preview, isLoading: loadingPreview } = useQuery<DocumentPreview>({
+  const { data: preview, isLoading: loadingPreview } = useQuery<DocumentPreviewUnique>({
     queryKey: ['documents', documentId, 'preview'],
     queryFn: () => documentApi.preview(documentId),
     enabled: !!documentId,
@@ -290,118 +198,6 @@ export default function DocumentDetailPage() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function FilterBtn({ active, onClick, label, variant }: { active: boolean, onClick: () => void, label: string, variant: string }) {
-  const base = "px-4 py-2 text-[10px] font-bold uppercase tracking-wider rounded-full border border-white/5 transition-all";
-  const styles = {
-    all: active ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10',
-    pending: active ? 'bg-amber-500/40 text-amber-200' : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20',
-    accepted: active ? 'bg-green-500/40 text-green-200' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20',
-    rejected: active ? 'bg-red-500/40 text-red-200' : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
-  };
-  return <button onClick={onClick} className={cn(base, styles[variant as keyof typeof styles])}>{label}</button>;
-}
-
-function SectionListItem({ section, isSelected, onClick }: { section: Section, isSelected: boolean, onClick: () => void }) {
-  const getBadgeStyles = (type: ChangeType) => {
-    switch (type) {
-      case 'pending': return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
-      case 'accepted': return 'bg-green-500/20 text-green-300 border-green-500/30';
-      case 'rejected': return 'bg-red-500/20 text-red-300 border-red-500/30';
-      default: return 'bg-white/10 text-slate-400 border-white/10';
-    }
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      className={cn("w-full text-left px-6 py-5 transition-all relative", isSelected ? "bg-white/[0.08]" : "hover:bg-white/[0.04]")}
-    >
-      {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary-500 shadow-[0_0_10px_rgba(14,165,233,0.5)]" />}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="font-medium text-sm text-slate-200 truncate">{section.section_title || 'Untitled Section'}</div>
-          <div className="flex items-center gap-3 mt-2">
-            <span className={cn("text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border", getBadgeStyles(section.change_type))}>{section.change_type}</span>
-            {section.changed_at && <span className="text-xs text-slate-500 font-light">{formatRelativeTime(section.changed_at)}</span>}
-          </div>
-        </div>
-        <ChevronRight className={cn("h-4 w-4 mt-1 transition-colors", isSelected ? 'text-white' : 'text-slate-600')} />
-      </div>
-    </button>
-  );
-}
-
-function DiffHeader({ section }: { section: Section }) {
-  const styles = {
-    pending: 'bg-amber-500/10 text-amber-200 border-amber-500/20',
-    accepted: 'bg-green-500/10 text-green-200 border-green-500/20',
-    rejected: 'bg-red-500/10 text-red-200 border-red-500/20',
-    none: 'bg-white/5 text-slate-200 border-white/10'
-  };
-  return (
-    <div className={cn("px-6 py-4 border-b flex items-center justify-between", styles[section.change_type as keyof typeof styles])}>
-      <div className="flex items-center gap-3">
-        {section.change_type === 'pending' && <AlertCircle className="h-4 w-4" />}
-        {section.change_type === 'accepted' && <Check className="h-4 w-4" />}
-        {section.change_type === 'rejected' && <X className="h-4 w-4" />}
-        <h3 className="font-medium text-sm">{section.section_title || 'Untitled Section'}</h3>
-      </div>
-      <span className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-60">{section.change_type}</span>
-    </div>
-  );
-}
-
-function DiffViewer({ original, modified, changeType }: { original: string, modified: string, changeType: ChangeType }) {
-  const diff = useMemo(() => computeWordDiff(original, modified), [original, modified]);
-  const isRejected = changeType === 'rejected';
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-6 text-[10px] font-bold uppercase tracking-widest">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-red-500/50" />
-          <span className="text-red-400 line-through decoration-red-500/50">{isRejected ? 'Proposed (Rejected)' : 'Removed'}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-500/50" />
-          <span className="text-green-400 underline decoration-green-500/50">{isRejected ? 'Kept' : 'Added'}</span>
-        </div>
-      </div>
-
-      <div className="font-mono text-sm border border-white/5 rounded-2xl p-6 bg-black/30 leading-relaxed whitespace-pre-wrap text-slate-300 shadow-inner">
-        {diff.map((segment, idx) => {
-          if (segment.type === 'unchanged') return <span key={idx}>{segment.text}</span>;
-          if (segment.type === 'added') return (
-            <span key={idx} className="bg-green-500/20 text-green-300 px-0.5 rounded underline decoration-green-500/50 underline-offset-4 font-bold">
-              {segment.text}
-            </span>
-          );
-          if (segment.type === 'removed') return (
-            <span key={idx} className="bg-red-500/20 text-red-300 px-0.5 rounded line-through decoration-red-500/50 font-bold">
-              {segment.text}
-            </span>
-          );
-          return null;
-        })}
-      </div>
-
-      <details className="group">
-        <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-300 select-none transition-colors">View side-by-side comparison</summary>
-        <div className="grid grid-cols-2 gap-4 mt-4 animate-[slideUpFade_0.3s_ease_both]">
-          <div className="space-y-2">
-            <span className="text-[9px] uppercase tracking-widest text-red-400/60 font-bold ml-2">Original State</span>
-            <div className="font-mono text-[11px] border border-red-500/10 rounded-xl p-4 bg-red-500/[0.02] text-slate-400 whitespace-pre-wrap max-h-[300px] overflow-y-auto no-scrollbar">{original}</div>
-          </div>
-          <div className="space-y-2">
-            <span className="text-[9px] uppercase tracking-widest text-green-400/60 font-bold ml-2">Proposed State</span>
-            <div className="font-mono text-[11px] border border-green-500/10 rounded-xl p-4 bg-green-500/[0.02] text-slate-300 whitespace-pre-wrap max-h-[300px] overflow-y-auto no-scrollbar">{modified}</div>
-          </div>
-        </div>
-      </details>
     </div>
   );
 }

@@ -1,11 +1,11 @@
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, List
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator
+from pydantic import Field, AnyHttpUrl, validator
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",     
+        env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -14,16 +14,20 @@ class Settings(BaseSettings):
     app_name: str = "Doc Updater"
     debug: bool = False
     environment: Literal["development", "staging", "production"] = "development"
-    
 
-    database_url: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@postgres:5432/pluno",
-        description="PostgreSQL connection string",
-    )
+    postgres_user: str = "postgres"
+    postgres_password: str = "postgres"
+    postgres_server: str = "localhost"
+    postgres_port: int = 5432
+    postgres_db: str = "pluno"
 
-    redis_host: str = Field(default="localhost", alias="REDIS_HOST")
-    redis_port: int = Field(default=6379, ge=1, le=65535)
-    redis_db: int = Field(default=0, ge=0, le=15)
+    @property
+    def database_url(self) -> str:
+        return f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_server}:{self.postgres_port}/{self.postgres_db}"
+
+    redis_host: str = "localhost" 
+    redis_port: int = 6379
+    redis_db: int = 0
     redis_password: str | None = None
     
     @property
@@ -32,16 +36,26 @@ class Settings(BaseSettings):
             return f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}/{self.redis_db}"
         return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
     
-    chroma_host: str = Field(default="localhost")
-    chroma_port: int = Field(default=8002, ge=1, le=65535)
+ 
+    chroma_host: str = "localhost"
+    chroma_port: int = 8002
     chroma_collection_name: str = "documentation"
 
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY", description="OpenAI API key")
+    openai_api_key: str = Field(..., description="OpenAI API key") 
     openai_model: str = "gpt-4o"
     openai_embedding_model: str = "text-embedding-3-small"
 
-    cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
-    api_prefix: str = "/api"
+
+    cors_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+    @validator("cors_origins", pre=True)
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str) and not v.startswith("["):
+            return [origin.strip() for origin in v.split(",")]
+        elif isinstance(v, (list, str)):
+            return v
+        raise ValueError(v)
+
 
     celery_broker_url: str | None = None
     celery_result_backend: str | None = None
@@ -57,7 +71,6 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
-
 
 @lru_cache()
 def get_settings() -> Settings:

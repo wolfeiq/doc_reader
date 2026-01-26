@@ -2,10 +2,8 @@
 
 import Link from 'next/link';
 import { FileText, FolderOpen, Loader2, ChevronRight } from 'lucide-react';
-import { formatRelativeTime } from '@/lib/utils';
+import { formatRelativeTime, groupByFolder } from '@/lib/utils';
 import { useDocuments } from '@/hooks';
-import { cn } from '@/lib/utils';
-import type { DocumentListItem } from '@/types';
 
 export default function DocumentsPage() {
   const { data: documents, isLoading } = useDocuments();
@@ -115,13 +113,3 @@ export default function DocumentsPage() {
   );
 }
 
-function groupByFolder(docs: DocumentListItem[]): Record<string, DocumentListItem[]> {
-  const groups: Record<string, DocumentListItem[]> = {};
-  docs.forEach((doc) => {
-    const parts = doc.file_path.split('/');
-    const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : '/';
-    if (!groups[folder]) groups[folder] = [];
-    groups[folder].push(doc);
-  });
-  return groups;
-}

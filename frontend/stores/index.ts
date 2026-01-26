@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SSESuggestionEvent, SSECompletedEvent } from '@/types';
 
+
 interface UIState {
   theme: 'light' | 'dark' | 'system';
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -21,14 +22,14 @@ export const useUIStore = create<UIState>()(
       theme: 'system',
       setTheme: (theme) => set({ theme }),
       sidebarOpen: true,
-      toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+      toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       diffMode: 'split',
-      setDiffMode: (diffMode) => set({ diffMode }),
+      setDiffMode: (mode) => set({ diffMode: mode }),
       shortcutsModalOpen: false,
-      setShortcutsModalOpen: (shortcutsModalOpen) => set({ shortcutsModalOpen }),
+      setShortcutsModalOpen: (open) => set({ shortcutsModalOpen: open }),
     }),
     {
-      name: 'pluno-ui',
+      name: 'ui-storage',
       partialize: (state) => ({
         theme: state.theme,
         sidebarOpen: state.sidebarOpen,
@@ -56,7 +57,7 @@ interface QueryState {
   incomingSuggestions: SSESuggestionEvent[];
   error: string | null;
   completionData: SSECompletedEvent | null;
-
+  
   setCurrentQuery: (id: string | null, text?: string) => void;
   startStreaming: (taskId?: string) => void;
   addStep: (step: Omit<StreamingStep, 'timestamp'>) => void;
@@ -66,15 +67,19 @@ interface QueryState {
   reset: () => void;
 }
 
-export const useQueryStore = create<QueryState>((set) => ({
+const initialQueryState = {
   currentQueryId: null,
   currentQueryText: '',
-  streamingStatus: 'idle',
+  streamingStatus: 'idle' as StreamingStatus,
   taskId: null,
   steps: [],
   incomingSuggestions: [],
   error: null,
   completionData: null,
+};
+
+export const useQueryStore = create<QueryState>((set) => ({
+  ...initialQueryState,
 
   setCurrentQuery: (id, text = '') =>
     set({
@@ -118,17 +123,7 @@ export const useQueryStore = create<QueryState>((set) => ({
       error,
     }),
 
-  reset: () =>
-    set({
-      currentQueryId: null,
-      currentQueryText: '',
-      streamingStatus: 'idle',
-      taskId: null,
-      steps: [],
-      incomingSuggestions: [],
-      error: null,
-      completionData: null,
-    }),
+  reset: () => set(initialQueryState),
 }));
 
 
@@ -136,7 +131,7 @@ interface SuggestionState {
   selectedId: string | null;
   editingId: string | null;
   editedText: string;
-
+  
   setSelected: (id: string | null) => void;
   startEditing: (id: string, text: string) => void;
   setEditedText: (text: string) => void;

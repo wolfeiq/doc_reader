@@ -25,6 +25,7 @@
     "remark-directive": "^4.0.0",
     "remark-directive-rehype": "^0.4.2",
     "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.4.0",
     "zustand": "^4.4.7"
   },
   "devDependencies": {
