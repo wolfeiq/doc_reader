@@ -34,8 +34,7 @@ build/
 dist/
 *.whl
 
-# Docker
-Dockerfile
+# Docker (keep Dockerfile, exclude compose files)
 docker-compose*.yml
 
 # Git
