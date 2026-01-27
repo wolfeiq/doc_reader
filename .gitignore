@@ -13,7 +13,6 @@ __pycache__/
 env/
 venv/
 *.egg-info/
-data/
 *.db
 .DS_Store
 .idea/
