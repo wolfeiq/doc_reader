@@ -35,7 +35,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import documents, history, queries, suggestions
+from app.api.routes import admin, documents, history, queries, suggestions
 from app.config import settings
 from app.db import close_db, init_db
 from app.services.search_service import search_service
@@ -149,6 +149,11 @@ app.include_router(
     history.router,
     prefix=f"{settings.api_prefix}/history",
     tags=["history"],
+)
+app.include_router(
+    admin.router,
+    prefix=f"{settings.api_prefix}",
+    tags=["admin"],
 )
 
 

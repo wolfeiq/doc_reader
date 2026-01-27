@@ -1,3 +1,3 @@
-from app.api.routes import documents, history, queries, suggestions
+from app.api.routes import admin, documents, history, queries, suggestions
 
-__all__ = ["documents", "history", "queries", "suggestions"]
+__all__ = ["admin", "documents", "history", "queries", "suggestions"]
