@@ -1,3 +1,48 @@
+"""
+Query Orchestrator - AI Agent for Documentation Analysis
+=========================================================
+
+This module implements the core AI agent that processes documentation update
+queries. It uses OpenAI's function calling (tools) to enable the AI to search,
+analyze, and propose edits to documentation.
+
+Agent Architecture:
+-------------------
+The orchestrator implements a ReAct-style agent loop:
+1. User submits a query ("Update API authentication docs")
+2. AI receives the query and available tools
+3. AI decides which tool to call (search, analyze, propose_edit)
+4. Tool executes and returns results
+5. AI decides next action based on results
+6. Loop continues until AI has enough info to stop (max 15 iterations)
+7. All proposed edits are saved as EditSuggestion records
+
+Available Tools:
+----------------
+- search_documentation: Semantic search across all docs
+- search_by_file_path: Search within a specific file
+- analyze_section: Deep analysis of a section's content
+- propose_edit: Create an edit suggestion
+
+Why Function Calling vs Fine-Tuning?
+------------------------------------
+Function calling is preferred because:
+1. No training data needed
+2. Works with base models (gpt-4o)
+3. Flexible - add new tools easily
+4. Transparent - we see what tools are called
+
+Production Considerations:
+--------------------------
+- Add token budget tracking (prevent runaway costs)
+- Implement streaming for tool results to UI
+- Add human-in-the-loop for high-impact edits
+- Consider caching repeated searches
+- Add safety checks (don't edit critical sections)
+- Implement rollback capability for bad edits
+- Monitor and log all AI decisions for auditing
+"""
+
 from __future__ import annotations
 
 import json
@@ -24,6 +69,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Safety limit to prevent infinite loops (API costs)
 MAX_ITERATIONS = 15
 DEFAULT_CONFIDENCE = 0.5
 
@@ -31,6 +77,24 @@ MessageDict = dict[str, Any]
 
 
 class QueryOrchestrator:
+    """
+    Orchestrates AI-powered documentation analysis.
+
+    The orchestrator manages the conversation between the user's query
+    and the AI model, coordinating tool calls and accumulating results.
+
+    Flow:
+    1. Initialize with database session and event emitter
+    2. Call process() with query details
+    3. AI enters tool-calling loop
+    4. Events are emitted for frontend progress display
+    5. Final suggestions are committed to database
+
+    Attributes:
+        db: Database session for persisting results
+        emitter: Event emitter for real-time progress updates
+        openai: OpenAI client for API calls
+    """
 
     def __init__(
         self,

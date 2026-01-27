@@ -19,19 +19,19 @@ logger = logging.getLogger(__name__)
 
 
 class DependencyService:
-    MARKDOWN_LINK_PATTERN = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
-    
-    EXPLICIT_REFERENCE_PATTERN = re.compile(
+    MARKDOWN_LINK_PATTERN: re.Pattern[str] = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
+
+    EXPLICIT_REFERENCE_PATTERN: re.Pattern[str] = re.compile(
         r'(?:see|refer to|check|read|described in|explained in)\s+(?:the\s+)?'
         r'["\']([^"\']{3,})["\'](?:\s+section)?',
         re.IGNORECASE
     )
 
-    CODE_REFERENCE_PATTERN = re.compile(
+    CODE_REFERENCE_PATTERN: re.Pattern[str] = re.compile(
         r'`([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*){1,})`'
     )
-    
-    COMMON_CODE_WORDS = {
+
+    COMMON_CODE_WORDS: set[str] = {
         'id', 'name', 'type', 'value', 'data', 'item', 'user', 'result',
         'error', 'status', 'code', 'message', 'text', 'true', 'false',
         'null', 'none', 'self', 'this', 'var', 'let', 'const'

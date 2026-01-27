@@ -5,7 +5,7 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sse_starlette.sse import EventSourceResponse
@@ -49,7 +49,7 @@ async def create_query(
         status_message="Query created, waiting to process",
     )
     db.add(query)
-    await db.commit()
+    await db.flush()
     await db.refresh(query)
 
     logger.info(f"Created query {query.id}: {query_in.query_text[:50]}...")
@@ -74,7 +74,11 @@ async def list_queries(
     status: QueryStatus | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> list[QueryResponse]:
-    stmt = select(Query).order_by(Query.created_at.desc())
+    stmt = (
+        select(Query)
+        .options(selectinload(Query.suggestions))
+        .order_by(Query.created_at.desc())
+    )
 
     if status:
         stmt = stmt.where(Query.status == status)
@@ -83,30 +87,20 @@ async def list_queries(
     result = await db.execute(stmt)
     queries = result.scalars().all()
 
-    responses: list[QueryResponse] = []
-    for query in queries:
-        count_result = await db.execute(
-            select(func.count(EditSuggestion.id)).where(
-                EditSuggestion.query_id == query.id
-            )
+    return [
+        QueryResponse(
+            id=query.id,
+            query_text=query.query_text,
+            status=query.status,
+            status_message=query.status_message,
+            completed_at=query.completed_at,
+            error_message=query.error_message,
+            created_at=query.created_at,
+            updated_at=query.updated_at,
+            suggestion_count=len(query.suggestions),
         )
-        suggestion_count = count_result.scalar() or 0
-
-        responses.append(
-            QueryResponse(
-                id=query.id,
-                query_text=query.query_text,
-                status=query.status,
-                status_message=query.status_message,
-                completed_at=query.completed_at,
-                error_message=query.error_message,
-                created_at=query.created_at,
-                updated_at=query.updated_at,
-                suggestion_count=suggestion_count,
-            )
-        )
-
-    return responses
+        for query in queries
+    ]
 
 
 @router.get("/{query_id}", response_model=QueryDetailResponse)
@@ -259,10 +253,6 @@ async def _stream_from_celery(
     query_id: UUID,
     query_text: str,
 ) -> EventSourceResponse:
-    
-    subscriber = RedisEventSubscriber(query_id)
-    
-
     task = process_query_async.delay(str(query_id), query_text)
     logger.info(f"Started Celery task {task.id} for query {query_id}")
 
@@ -272,7 +262,9 @@ async def _stream_from_celery(
             "data": json.dumps({"task_id": task.id, "query_id": str(query_id)}),
         }
 
+        subscriber: RedisEventSubscriber | None = None
         try:
+            subscriber = RedisEventSubscriber(query_id)
             async for event in subscriber.events():
                 if event.event == EventType.HEARTBEAT:
                     yield {"event": "heartbeat", "data": "{}"}
@@ -282,10 +274,10 @@ async def _stream_from_celery(
                     "event": event.event.value,
                     "data": json.dumps(event.data, default=str),
                 }
-                
+
                 if event.event in (EventType.COMPLETED, EventType.ERROR):
                     break
-                    
+
         except Exception as e:
             logger.error(f"Error in event stream: {e}")
             yield {
@@ -293,7 +285,8 @@ async def _stream_from_celery(
                 "data": json.dumps({"error": str(e)}),
             }
         finally:
-            await subscriber.close()
+            if subscriber is not None:
+                await subscriber.close()
 
     return EventSourceResponse(event_generator())
 
@@ -356,4 +349,3 @@ async def delete_query(
 ) -> None:
     query = await get_query_or_404(db, query_id)
     await db.delete(query)
-    await db.commit()

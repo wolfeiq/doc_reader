@@ -168,14 +168,29 @@ def cleanup_orphaned_embeddings_task() -> CleanupOrphanedResultDict:
             search_service = SearchService()
             await search_service.initialize()
 
-            stats = search_service.get_collection_stats()
+            # Get all embedding IDs from ChromaDB
+            all_embedding_ids = search_service.list_all_ids()
+            chromadb_count = len(all_embedding_ids)
+
+            # Find orphaned embeddings (in ChromaDB but not in database)
+            orphaned_ids = [
+                eid for eid in all_embedding_ids
+                if eid not in valid_section_ids
+            ]
+
+            # Delete orphaned embeddings
+            deleted_count = 0
+            if orphaned_ids:
+                deleted_count = search_service.delete_ids(orphaned_ids)
+                logger.info(f"Deleted {deleted_count} orphaned embeddings")
 
             await search_service.close()
 
             return CleanupOrphanedResultDict(
                 valid_sections=len(valid_section_ids),
-                chromadb_count=stats.get("count", 0),
-                message="Full cleanup requires SearchService.list_all_ids() method",
+                chromadb_count=chromadb_count,
+                orphaned_deleted=deleted_count,
+                message=f"Cleaned up {deleted_count} orphaned embeddings",
             )
 
     return run_async(_cleanup())

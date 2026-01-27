@@ -1,19 +1,59 @@
+/**
+ * Review Page - Suggestion Review Interface
+ * ==========================================
+ *
+ * This page displays AI-generated suggestions for a specific query.
+ * Users can review, accept, reject, or edit each suggestion.
+ *
+ * URL Pattern: /review?query={queryId}
+ *
+ * Page States:
+ * ------------
+ * 1. No query param: Show "No Query Selected" message with link to home
+ * 2. Loading: Show spinner while fetching query details
+ * 3. Error: Show error message with link to go back
+ * 4. Success: Show list of suggestions with action buttons
+ *
+ * Data Flow:
+ * ----------
+ * 1. Extract queryId from URL search params
+ * 2. Fetch query details (including suggestions) via React Query
+ * 3. Wrap content in SuggestionMutationProvider for context
+ * 4. Render SuggestionList with all suggestions
+ *
+ * User Actions:
+ * -------------
+ * - Accept: Apply AI's suggested text to the document
+ * - Reject: Decline the suggestion (no changes)
+ * - Edit: Modify the suggested text before accepting
+ *
+ * Production Considerations:
+ * --------------------------
+ * - Add bulk actions (accept all, reject all)
+ * - Add filtering by confidence score
+ * - Add sorting options (by confidence, file, status)
+ * - Consider pagination for many suggestions
+ * - Add undo capability for accidental accepts/rejects
+ */
+
 'use client';
 
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Loader2, Sparkles } from 'lucide-react';
-import { useQueryDetail, useAcceptSuggestion, useRejectSuggestion, useUpdateSuggestion } from '@/hooks';
+import { useQueryDetail } from '@/hooks';
 import { SuggestionList } from '@/components/suggestions';
 import { Button } from '@/components/ui';
+import { SuggestionMutationProvider } from '@/contexts';
 
+/**
+ * Review page for accepting/rejecting AI suggestions.
+ * Requires ?query={id} search parameter.
+ */
 export default function ReviewPage() {
   const searchParams = useSearchParams();
   const queryId = searchParams.get('query');
   const { data: query, isLoading, error } = useQueryDetail(queryId || '');
-  const acceptMutation = useAcceptSuggestion();
-  const rejectMutation = useRejectSuggestion();
-  const updateMutation = useUpdateSuggestion();
 
   if (!queryId) {
     return (
@@ -58,40 +98,34 @@ export default function ReviewPage() {
     );
   }
 
-  const isActionLoading = acceptMutation.isPending || rejectMutation.isPending || updateMutation.isPending;
-
   return (
-    <div className="max-w-5xl mx-auto space-y-10 py-10 px-4">
-      <div className="text-center space-y-4 animate-[slideUpFade_0.6s_ease_both]">
-        <Link 
-          href="/" 
-          className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-primary-400 transition-colors mb-2"
-        >
-          <ArrowLeft className="h-3 w-3" /> Back to Analysis
-        </Link>
-        
-        <h1 className="text-slate-100 flex items-center justify-center gap-3">
-          Review Suggestions
-        </h1>
-        
-        {query?.query_text && (
-          <div className="glass-panel inline-block px-6 py-3 rounded-2xl border border-white/5 shadow-xl">
-             <p className="text-sm text-slate-400 font-light italic leading-relaxed">
-              &quot;{query.query_text}&quot;
-            </p>
-          </div>
-        )}
-      </div>
+    <SuggestionMutationProvider>
+      <div className="max-w-5xl mx-auto space-y-10 py-10 px-4">
+        <div className="text-center space-y-4 animate-[slideUpFade_0.6s_ease_both]">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-primary-400 transition-colors mb-2"
+          >
+            <ArrowLeft className="h-3 w-3" /> Back to Analysis
+          </Link>
 
-      <div className="animate-[slideUpFade_0.8s_ease_both] delay-200">
-        <SuggestionList
-          suggestions={query?.suggestions || []}
-          onAccept={(id) => acceptMutation.mutate(id)}
-          onReject={(id) => rejectMutation.mutate(id)}
-          onSave={(id, text) => updateMutation.mutate({ id, data: { edited_text: text } })}
-          isLoading={isActionLoading}
-        />
+          <h1 className="text-slate-100 flex items-center justify-center gap-3">
+            Review Suggestions
+          </h1>
+
+          {query?.query_text && (
+            <div className="glass-panel inline-block px-6 py-3 rounded-2xl border border-white/5 shadow-xl">
+              <p className="text-sm text-slate-400 font-light italic leading-relaxed">
+                &quot;{query.query_text}&quot;
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="animate-[slideUpFade_0.8s_ease_both] delay-200">
+          <SuggestionList suggestions={query?.suggestions || []} />
+        </div>
       </div>
-    </div>
+    </SuggestionMutationProvider>
   );
 }

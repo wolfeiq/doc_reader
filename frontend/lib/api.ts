@@ -6,11 +6,15 @@ import type {
   SuggestionUpdate,
   SuggestionActionResponse,
   DocumentListItem,
-  DocumentPreview,
+  DocumentPreviewUnique,
   EditHistory,
+  UserAction,
+  Document as DocumentType,
 } from '@/types';
+import { API_BASE, validateEnv } from './env';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+// Validate env on first import (client-side only)
+validateEnv();
 
 class ApiError extends Error {
   constructor(
@@ -37,7 +41,7 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   }
 
   if (response.status === 204) {
-    return null as T;
+    return undefined as unknown as T;
   }
 
   return response.json();
@@ -111,9 +115,9 @@ export const documentApi = {
     return fetchApi<DocumentListItem[]>(`/documents${query}`);
   },
 
-  get: (id: string) => fetchApi<Document>(`/documents/${id}`),
+  get: (id: string) => fetchApi<DocumentType>(`/documents/${id}`),
 
-  preview: (id: string) => fetchApi<DocumentPreview>(`/documents/${id}/preview`),
+  preview: (id: string) => fetchApi<DocumentPreviewUnique>(`/documents/${id}/preview`),
 
   delete: (id: string) =>
     fetchApi<void>(`/documents/${id}`, { method: 'DELETE' }),
@@ -124,7 +128,7 @@ export const historyApi = {
     skip?: number;
     limit?: number;
     document_id?: string;
-    action?: string;
+    action?: UserAction;
   }) => {
     const query = buildQueryString(params || {});
     return fetchApi<EditHistory[]>(`/history${query}`);

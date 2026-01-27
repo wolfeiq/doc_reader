@@ -1,3 +1,41 @@
+"""
+Document Service - Core Business Logic for Document Management
+==============================================================
+
+This service handles all document-related operations:
+- Parsing Markdown documents into sections
+- Creating/updating documents in the database
+- Generating and managing vector embeddings
+- Building inter-section dependency graphs
+- Applying edit suggestions to sections
+
+Architecture Decision - Service Layer:
+--------------------------------------
+We use a service layer pattern instead of putting logic in routes because:
+1. Reusability - Same logic used by API routes, CLI, and Celery tasks
+2. Testability - Services can be unit tested without HTTP
+3. Transaction boundaries - Service methods define atomic operations
+4. Separation of concerns - Routes handle HTTP, services handle business logic
+
+Markdown Parsing Strategy:
+--------------------------
+Documents are split by Markdown headings (# to ######).
+The parser handles edge cases:
+- Code blocks (don't split on # in code)
+- HTML blocks
+- Tables
+- Nested lists
+- Blockquotes
+
+Production Considerations:
+--------------------------
+- Add document size limits (prevent memory issues)
+- Implement incremental parsing (only changed sections)
+- Add caching for frequently accessed documents
+- Consider async batch embedding generation
+- Add content validation/sanitization
+"""
+
 from __future__ import annotations
 import hashlib
 import logging
@@ -18,16 +56,37 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ParsedSection:
-    title: str
-    content: str
-    start_line: int
-    end_line: int
-    level: int
+    """
+    Intermediate representation of a parsed document section.
+
+    Used during document parsing before creating DocumentSection ORM objects.
+    Tracks line numbers for potential diff generation.
+    """
+    title: str       # Section heading text (without # prefix)
+    content: str     # Full content under this heading
+    start_line: int  # Line number where section starts
+    end_line: int    # Line number where section ends
+    level: int       # Heading level (1-6)
 
 
 class DocumentService:
+    """
+    Service for managing documents and their sections.
 
-    HEADER_PATTERN = re.compile(r"^(#{1,6})\s+(.+)$")
+    Responsibilities:
+    - Parse Markdown into sections
+    - CRUD operations for documents
+    - Manage vector embeddings in ChromaDB
+    - Build section dependency graphs
+    - Apply edit suggestions
+
+    Usage:
+        async with get_db() as db:
+            service = DocumentService(db)
+            doc = await service.create_document("docs/api.md", content)
+    """
+
+    HEADER_PATTERN: re.Pattern[str] = re.compile(r"^(#{1,6})\s+(.+)$")
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db

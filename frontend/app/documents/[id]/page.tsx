@@ -6,11 +6,11 @@ import { ArrowLeft, Loader2, AlertCircle, Check } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
 import { documentApi } from '@/lib/api';
-import type { Section, DocumentPreviewUnique} from '@/types';
+import type { Section, DocumentPreviewUnique, FilterVariant } from '@/types';
 import { FilterBtn } from '@/components/ui/FilterBtn';
 import { SectionListItem } from '@/components/ui/SectionListItem';
 import { DiffHeader } from '@/components/ui/DiffHeader';
-import { DiffViewer } from '@/components/ui/DiffViewer';
+import { SectionDiff } from '@/components/ui/DiffViewer';
 
 const MarkdownRenderer = dynamic(() => import('@/components/ui/ClientMarkdown'), { ssr: false });
 
@@ -32,7 +32,7 @@ export default function DocumentDetailPage() {
   });
 
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [filterType, setFilterType] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
+  const [filterType, setFilterType] = useState<FilterVariant>('all');
 
   const changedSections = useMemo(
     () => preview?.sections.filter((s: Section) => s.change_type !== 'none') || [],
@@ -187,7 +187,7 @@ export default function DocumentDetailPage() {
               <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl animate-[slideUpFade_0.4s_ease_both]">
                 <DiffHeader section={selectedSectionData} />
                 <div className="p-6">
-                  <DiffViewer
+                  <SectionDiff
                     original={selectedSectionData.original_content || ''}
                     modified={selectedSectionData.preview_content || ''}
                     changeType={selectedSectionData.change_type}

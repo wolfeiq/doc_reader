@@ -1,6 +1,44 @@
+/**
+ * Frontend TypeScript Type Definitions
+ * =====================================
+ *
+ * This file contains all TypeScript interfaces and types for the application.
+ * Types are organized by domain: Query, Suggestion, Document, History, SSE, UI.
+ *
+ * Type Safety Strategy:
+ * ---------------------
+ * - All API responses have corresponding TypeScript interfaces
+ * - Interfaces mirror backend Pydantic schemas for consistency
+ * - Union types used for enums (QueryStatus, SuggestionStatus)
+ * - Nullable fields explicitly typed as `T | null`
+ *
+ * Naming Conventions:
+ * -------------------
+ * - Interfaces: PascalCase (Query, Suggestion)
+ * - Type aliases: PascalCase (QueryStatus)
+ * - Props interfaces: ComponentNameProps (QueryInputProps)
+ * - API request types: EntityCreate, EntityUpdate
+ * - API response types: Entity, EntityDetail, EntityListItem
+ *
+ * Production Considerations:
+ * --------------------------
+ * - Consider using Zod for runtime validation of API responses
+ * - Add JSDoc comments for complex interfaces
+ * - Consider generating types from OpenAPI spec (openapi-typescript)
+ * - Add strict null checks in tsconfig.json
+ */
 
+// =============================================================================
+// Query Types - Documentation update requests
+// =============================================================================
+
+/** Status of a query in the processing pipeline */
 export type QueryStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
+/**
+ * A documentation update query (list view).
+ * Contains summary info without full suggestions.
+ */
 export interface Query {
   id: string;
   query_text: string;
@@ -13,37 +51,54 @@ export interface Query {
   suggestion_count: number;
 }
 
+/**
+ * A query with its full suggestions (detail view).
+ * Used on the review page.
+ */
 export interface QueryDetail extends Query {
   suggestions: Suggestion[];
 }
 
+/** Request body for creating a new query */
 export interface QueryCreate {
   query_text: string;
 }
 
+// =============================================================================
+// Suggestion Types - AI-generated edit proposals
+// =============================================================================
+
+/** Status of a suggestion in the review workflow */
 export type SuggestionStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EDITED';
 
+/**
+ * An AI-generated edit suggestion.
+ * Shown in SuggestionCard with diff viewer.
+ */
 export interface Suggestion {
   id: string;
   query_id: string;
   section_id: string;
-  original_text: string;
-  suggested_text: string;
-  reasoning: string;
-  confidence: number;
+  document_id: string;
+  original_text: string;      // Current content
+  suggested_text: string;     // AI's proposed content
+  reasoning: string;          // AI's explanation
+  confidence: number;         // 0.0-1.0 confidence score
   status: SuggestionStatus;
-  edited_text: string | null;
+  edited_text: string | null; // User's modified version (if edited)
   created_at: string;
   updated_at: string;
   section_title: string | null;
   file_path: string | null;
 }
 
+/** Request body for updating a suggestion */
 export interface SuggestionUpdate {
   status?: SuggestionStatus;
   edited_text?: string;
 }
 
+/** Response from accept/reject suggestion actions */
 export interface SuggestionActionResponse {
   success: boolean;
   suggestion_id: string;
@@ -51,12 +106,17 @@ export interface SuggestionActionResponse {
   message: string;
 }
 
+// =============================================================================
+// Document Types - Documentation files and sections
+// =============================================================================
+
+/** A full document with all its content and sections */
 export interface Document {
   id: string;
   file_path: string;
   title: string | null;
-  content: string;
-  checksum: string;
+  content: string;       // Full raw content
+  checksum: string;      // SHA-256 for change detection
   created_at: string;
   updated_at: string;
   sections: DocumentSection[];
@@ -160,6 +220,8 @@ export interface SuggestionListProps {
 }
 
 export type ChangeType = 'none' | 'pending' | 'accepted' | 'rejected';
+
+export type FilterVariant = 'all' | 'pending' | 'accepted' | 'rejected';
 
 export interface Section {
   section_id: string;

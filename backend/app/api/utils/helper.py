@@ -4,7 +4,7 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from typing import Sequence
+from typing import Any, Sequence
 from app.models.document_base import Document
 from app.models.document import DocumentSection
 from app.models.history import EditHistory, UserAction
@@ -16,7 +16,7 @@ async def get_suggestion_or_404(
     db: AsyncSession,
     suggestion_id: UUID,
     *,
-    options: list | None = None,
+    options: list[Any] | None = None,
 ) -> EditSuggestion:
 
     stmt = select(EditSuggestion).where(EditSuggestion.id == suggestion_id)
@@ -34,10 +34,10 @@ async def get_suggestion_or_404(
 
 
 async def get_query_or_404(
-    db: AsyncSession, 
+    db: AsyncSession,
     query_id: UUID,
     *,
-    options: list | None = None,
+    options: list[Any] | None = None,
 ) -> Query:
 
     stmt = select(Query).where(Query.id == query_id)

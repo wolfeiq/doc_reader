@@ -1,13 +1,15 @@
 'use client';
 
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { FileText } from 'lucide-react';
 import { SuggestionCard } from './SuggestionCard';
-import type { Suggestion, SuggestionListProps } from '@/types';
+import type { Suggestion } from '@/types';
 
+interface SuggestionListProps {
+  suggestions: Suggestion[];
+}
 
-export function SuggestionList({ suggestions, onAccept, onReject, onSave, isLoading }: SuggestionListProps) {
-
+export const SuggestionList = React.memo(function SuggestionList({ suggestions }: SuggestionListProps) {
   const grouped = useMemo(() => {
     const groups: Record<string, Suggestion[]> = {};
     suggestions.forEach((s) => {
@@ -39,11 +41,11 @@ export function SuggestionList({ suggestions, onAccept, onReject, onSave, isLoad
           </h3>
           <div className="space-y-4">
             {items.map((s) => (
-              <SuggestionCard key={s.id} suggestion={s} onAccept={onAccept} onReject={onReject} onSave={onSave} isLoading={isLoading} />
+              <SuggestionCard key={s.id} suggestion={s} />
             ))}
           </div>
         </div>
       ))}
     </div>
   );
-}
+});

@@ -1,7 +1,62 @@
+"""
+Search Service - Vector Similarity Search with ChromaDB
+========================================================
+
+This service provides semantic search capabilities using vector embeddings.
+Documents are embedded using OpenAI's embedding model and stored in ChromaDB.
+
+How Vector Search Works:
+------------------------
+1. Document sections are converted to vectors (embeddings) using OpenAI
+2. Vectors are stored in ChromaDB with metadata
+3. Search queries are also converted to vectors
+4. ChromaDB finds sections with similar vectors (cosine similarity)
+
+Why ChromaDB?
+-------------
+- Easy self-hosted setup (runs as Docker container)
+- Good performance for small-medium datasets (<1M vectors)
+- Simple HTTP API
+- Supports metadata filtering
+
+Production Alternatives:
+------------------------
+For larger scale or managed service, consider:
+- Pinecone: Fully managed, excellent scaling
+- Weaviate: Open source, good hybrid search
+- Qdrant: High performance, Rust-based
+- pgvector: PostgreSQL extension (keeps everything in one DB)
+
+Cost Considerations:
+--------------------
+- OpenAI embeddings: ~$0.00002 per 1K tokens (text-embedding-3-small)
+- A typical doc section is ~500 tokens = $0.00001 per section
+- 10K sections = ~$0.10 to embed
+- Consider batching embeddings and caching frequently searched queries
+
+Production Considerations:
+--------------------------
+- Implement embedding cache (Redis) for repeated content
+- Add retry logic for OpenAI API failures (already done via tenacity)
+- Monitor ChromaDB memory usage
+- Consider async embedding generation for bulk imports
+- Add embedding version tracking for model upgrades
+"""
+
 from __future__ import annotations
 import logging
-from typing import Any, cast
+from typing import Any, TypedDict, NotRequired
 from uuid import UUID
+
+
+class SearchResultDict(TypedDict):
+    """Type definition for search results returned by the service."""
+    section_id: str
+    content: str | None
+    metadata: dict[str, Any]
+    score: float  # 0.0-1.0, higher is more similar
+
+
 import chromadb
 from chromadb.api.models.Collection import Collection
 from chromadb.errors import ChromaError
@@ -86,11 +141,11 @@ class SearchService:
         self,
         query: str,
         n_results: int = 5,
-        where: dict | None = None,
+        where: dict[str, Any] | None = None,
         file_path_filter: str | None = None,
         document_id_filter: str | None = None,
         min_score: float | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[SearchResultDict]:
         self._ensure_initialized()
         if self._collection is None:
             raise VectorStoreError("Collection not initialized")
@@ -137,7 +192,7 @@ class SearchService:
         path_pattern: str,
         query: str = "",
         n_results: int = 20
-    ) -> list[dict[str, Any]]:
+    ) -> list[SearchResultDict]:
         return await self.search(
             query=query, 
             n_results=n_results,
@@ -148,8 +203,8 @@ class SearchService:
         self,
         results: dict[str, Any],
         min_score: float | None,
-    ) -> list[dict[str, Any]]:
-        formatted: list[dict[str, Any]] = []
+    ) -> list[SearchResultDict]:
+        formatted: list[SearchResultDict] = []
 
         if not results.get("ids") or not results["ids"][0]:
             return formatted
@@ -192,6 +247,24 @@ class SearchService:
         self._ensure_initialized()
         results = self._collection.get(include=[])
         if results["ids"]: self._collection.delete(ids=results["ids"])
+
+    def list_all_ids(self) -> list[str]:
+        """Return all embedding IDs in the collection."""
+        self._ensure_initialized()
+        if self._collection is None:
+            return []
+        results = self._collection.get(include=[])
+        return results.get("ids", [])
+
+    def delete_ids(self, ids: list[str]) -> int:
+        """Delete embeddings by IDs. Returns count of deleted."""
+        if not ids:
+            return 0
+        self._ensure_initialized()
+        if self._collection is None:
+            return 0
+        self._collection.delete(ids=ids)
+        return len(ids)
 
     async def initialize(self) -> None:
         self._ensure_initialized()

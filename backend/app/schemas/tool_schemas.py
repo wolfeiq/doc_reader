@@ -65,7 +65,7 @@ class SectionResult(BaseModel):
 
 class DependencyResult(BaseModel):
     section_id: str
-    dependencies: list[dict[str, Any]]
+    dependencies: list[DependencyInfo]
 
 class ProposeEditResult(BaseModel):
     success: bool = True
@@ -85,7 +85,7 @@ class DocumentStructureResult(BaseModel):
     error: str | None = None
 
 class FilePathSearchResult(BaseModel):
-    results: list[dict[str, Any]]
+    results: list[SearchResultItem]
     count: int
     pattern: str
 

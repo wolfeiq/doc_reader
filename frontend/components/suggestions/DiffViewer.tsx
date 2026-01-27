@@ -3,14 +3,18 @@
 import { useMemo } from 'react';
 import * as Diff from 'diff';
 import { cn } from '@/lib/utils';
-import { useUIStore } from '@/stores';
+import { useDiffMode, useSetDiffMode } from '@/stores';
 import { Button } from '../ui';
 import { Columns2, Rows3 } from 'lucide-react';
 import type { DiffViewerProps } from '@/types';
 
-
+/**
+ * DiffViewer - Line-level diff viewer with split/unified mode toggle
+ * Used in review page for suggestion cards
+ */
 export function DiffViewer({ original, modified }: DiffViewerProps) {
-  const { diffMode, setDiffMode } = useUIStore();
+  const diffMode = useDiffMode();
+  const setDiffMode = useSetDiffMode();
   const diff = useMemo(() => Diff.diffLines(original, modified), [original, modified]);
 
   return (

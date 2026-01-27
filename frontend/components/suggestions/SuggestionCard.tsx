@@ -1,18 +1,69 @@
+/**
+ * SuggestionCard - Individual Suggestion Review Component
+ * ========================================================
+ *
+ * This component displays a single AI suggestion with all its details
+ * and action buttons. It's the primary interface for reviewing suggestions.
+ *
+ * Component Structure:
+ * --------------------
+ * - Header: Section title, file path, confidence badge, status badge
+ * - Body: Diff viewer (original vs suggested) or edit textarea
+ * - Reasoning: Collapsible AI explanation section
+ * - Footer: Status display and action buttons (Edit, Reject, Accept)
+ *
+ * State Management:
+ * -----------------
+ * - Selection state: From useSuggestionStore (which card is selected)
+ * - Editing state: From useSuggestionStore (editing mode, edited text)
+ * - Mutations: From useSuggestionMutations context (accept, reject, save)
+ *
+ * Why React.memo?
+ * ---------------
+ * The suggestion list can have many items. React.memo prevents re-renders
+ * when parent re-renders but this card's props haven't changed.
+ *
+ * User Interactions:
+ * ------------------
+ * - Click card: Selects it (visual highlight)
+ * - Edit button: Enters edit mode with textarea
+ * - Accept button: Applies suggested_text (or edited_text) to document
+ * - Reject button: Marks suggestion as rejected (no changes)
+ * - AI Reasoning toggle: Expands/collapses explanation
+ *
+ * Production Considerations:
+ * --------------------------
+ * - Add keyboard shortcuts (A=accept, R=reject, E=edit)
+ * - Add confirmation dialog for destructive actions
+ * - Consider virtualization for very long lists
+ * - Add loading skeleton state
+ */
+
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Check, X, Pencil, ChevronDown, ChevronUp, FileText, MessageSquare, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getConfidenceColor, getConfidenceBg, getStatusColor, getStatusBg } from '@/lib/utils';
 import { useSuggestionStore } from '@/stores';
+import { useSuggestionMutations } from '@/contexts';
 import { Button, Badge } from '../ui';
 import { DiffViewer } from './DiffViewer';
-import type { SuggestionCardProps } from '@/types';
+import type { Suggestion } from '@/types';
 
-export function SuggestionCard({ suggestion, onAccept, onReject, onSave, isLoading }: SuggestionCardProps) {
+interface SuggestionCardProps {
+  suggestion: Suggestion;
+}
+
+/**
+ * Card component for reviewing and acting on a single suggestion.
+ * Memoized to prevent unnecessary re-renders in lists.
+ */
+export const SuggestionCard = React.memo(function SuggestionCard({ suggestion }: SuggestionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const { selectedId, setSelected, editingId, editedText, startEditing, setEditedText, cancelEditing } = useSuggestionStore();
+  const { acceptSuggestion, rejectSuggestion, saveSuggestion, isLoading } = useSuggestionMutations();
 
   const isSelected = selectedId === suggestion.id;
   const isEditing = editingId === suggestion.id;
@@ -20,7 +71,7 @@ export function SuggestionCard({ suggestion, onAccept, onReject, onSave, isLoadi
   const displayText = suggestion.edited_text || suggestion.suggested_text;
 
   const handleSave = () => {
-    onSave(suggestion.id, editedText);
+    saveSuggestion(suggestion.id, editedText);
     cancelEditing();
   };
 
@@ -57,12 +108,12 @@ export function SuggestionCard({ suggestion, onAccept, onReject, onSave, isLoadi
                 href={`/documents/${suggestion.document_id}`}
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                  "text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-md",
-                  "bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.4)]",
-                  "hover:bg-orange-400 hover:scale-105 transition-all animate-pulse"
+                  "text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md",
+                  "bg-primary-600/80 text-white",
+                  "hover:bg-primary-500 transition-all"
                 )}
               >
-                click here to see the changes in the whole doc!!!
+                View Document
               </Link>
             </div>
           </div>
@@ -152,19 +203,19 @@ export function SuggestionCard({ suggestion, onAccept, onReject, onSave, isLoadi
             <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
           </Button>
           
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={(e) => { e.stopPropagation(); onReject(suggestion.id); }} 
-            disabled={isLoading || !isPending} 
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); rejectSuggestion(suggestion.id); }}
+            disabled={isLoading || !isPending}
             className="rounded-full px-4 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 border-none"
           >
             <X className="h-3.5 w-3.5 mr-1.5" /> Reject
           </Button>
 
-          <Button 
-            size="sm" 
-            onClick={(e) => { e.stopPropagation(); onAccept(suggestion.id); }} 
+          <Button
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); acceptSuggestion(suggestion.id); }}
             disabled={isLoading || !isPending}
             className="rounded-full px-6 bg-primary-600 hover:bg-primary-500 shadow-lg shadow-primary-900/20"
           >
@@ -174,4 +225,4 @@ export function SuggestionCard({ suggestion, onAccept, onReject, onSave, isLoadi
       </div>
     </div>
   );
-}
+});

@@ -4,7 +4,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from functools import wraps
-from typing import Any, Coroutine, TypeVar
+from types import TracebackType
+from typing import Any, Awaitable, Callable, Coroutine, ParamSpec, TypeVar
 
 from celery import Task
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,7 @@ from app.db.session import AsyncSessionLocal
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 def run_async(coro: Coroutine[Any, Any, T]) -> T:
@@ -44,7 +46,7 @@ class DBSessionContext:
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
-        exc_tb: Any,
+        exc_tb: TracebackType | None,
     ) -> None:
         if self.session:
             if exc_type:
@@ -58,17 +60,21 @@ class DBSessionContext:
             await self.session.close()
 
 
-def with_db_session(func: Any) -> Any:
+def with_db_session(
+    func: Callable[..., Awaitable[T]]
+) -> Callable[..., Awaitable[T]]:
     @wraps(func)
-    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+    async def wrapper(*args: Any, **kwargs: Any) -> T:
         async with DBSessionContext() as db:
             return await func(db, *args, **kwargs)
     return wrapper
 
 
-def celery_task_wrapper(async_func: Any) -> Any:
+def celery_task_wrapper(
+    async_func: Callable[P, Awaitable[T]]
+) -> Callable[P, T]:
     @wraps(async_func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         return run_async(async_func(*args, **kwargs))
     return wrapper
 

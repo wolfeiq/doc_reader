@@ -6,7 +6,7 @@ import { formatRelativeTime, groupByFolder } from '@/lib/utils';
 import { useDocuments } from '@/hooks';
 
 export default function DocumentsPage() {
-  const { data: documents, isLoading } = useDocuments();
+  const { data: documents, isLoading, isFetching } = useDocuments();
 
   if (isLoading) {
     return (
@@ -18,6 +18,7 @@ export default function DocumentsPage() {
   }
 
   const grouped = groupByFolder(documents || []);
+  const isRefetching = isFetching && !isLoading;
 
   return (
     <div className="max-w-5xl mx-auto space-y-10 py-10 px-4">
@@ -28,6 +29,12 @@ export default function DocumentsPage() {
         <p className="text-lg text-slate-400/70 font-light max-w-lg mx-auto leading-relaxed">
           Browse your managed documentation and tracked file sections.
         </p>
+        {isRefetching && (
+          <div className="flex items-center justify-center gap-2 text-sm text-primary-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Refreshing...</span>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">

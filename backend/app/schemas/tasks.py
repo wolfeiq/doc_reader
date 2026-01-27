@@ -104,6 +104,7 @@ class VerifyIntegrityResultDict(TypedDict):
 class CleanupOrphanedResultDict(TypedDict):
     valid_sections: int
     chromadb_count: int
+    orphaned_deleted: NotRequired[int]
     message: str
 
 

@@ -40,7 +40,7 @@ const ClientMarkdown: React.FC<ClientMarkdownProps> = ({ content }) => {
             </li>
           ),
 
-          code({ inline, className, children, ...props }) {
+          code({ inline, className, children, ...props }: { inline?: boolean; className?: string; children?: React.ReactNode }) {
             const match = /language-(\w+)/.exec(className || '');
             const language = match ? match[1] : '';
 

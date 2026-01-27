@@ -1,16 +1,79 @@
+"""
+AI Tool Definitions for OpenAI Function Calling
+================================================
+
+This module defines the tools (functions) available to the AI agent.
+These are passed to OpenAI's API and the AI can choose to call them.
+
+Tool Design Principles:
+-----------------------
+1. Clear descriptions - AI uses these to decide when to call
+2. Typed parameters - Ensures valid inputs
+3. Single responsibility - Each tool does one thing well
+4. Informative results - Return enough context for AI to proceed
+
+Available Tools:
+----------------
+1. semantic_search
+   - Vector similarity search across all documentation
+   - Use: Finding relevant sections based on query intent
+
+2. get_section_content
+   - Retrieves full content of a specific section
+   - Use: Getting complete context after search
+
+3. find_dependencies
+   - Finds sections that reference or are referenced by a section
+   - Use: Identifying cascade updates needed
+
+4. propose_edit
+   - Creates an edit suggestion for review
+   - Use: Final step when AI determines a section needs updating
+
+5. get_document_structure
+   - Lists all sections in a document
+   - Use: Understanding document organization
+
+6. search_by_file_path
+   - Finds sections in specific files
+   - Use: When user mentions specific file names
+
+Adding New Tools:
+-----------------
+To add a new tool:
+1. Define the tool schema here (follow OpenAI function format)
+2. Add executor implementation in tool_executor.py
+3. Add corresponding Pydantic model in tool_schemas.py
+
+Production Considerations:
+--------------------------
+- Add rate limiting per tool (prevent excessive API calls)
+- Log all tool calls for debugging and cost tracking
+- Consider tool permissions (some tools might be admin-only)
+- Add tool versioning for backwards compatibility
+"""
+
 from typing import Any, TypedDict, NotRequired
 
 
 class ToolFunction(TypedDict):
+    """OpenAI function definition schema."""
     name: str
     description: str
     parameters: dict[str, Any]
 
 
 class Tool(TypedDict):
-    type: str
+    """OpenAI tool definition (wrapper around function)."""
+    type: str  # Always "function" for now
     function: ToolFunction
 
+
+# =============================================================================
+# Tool Definitions
+# =============================================================================
+# These are passed directly to OpenAI's chat completion API.
+# The AI reads these descriptions to decide which tool to use.
 
 TOOLS: list[Tool] = [
     {

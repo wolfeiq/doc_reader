@@ -13,6 +13,7 @@ from uuid import UUID
 import redis.asyncio as aioredis
 from redis.asyncio.client import Redis
 import redis as sync_redis
+from redis.client import Redis as SyncRedis
 
 from app.config import settings
 
@@ -106,10 +107,10 @@ class RedisEventPublisher:
     def __init__(self, query_id: str | UUID) -> None:
         self.query_id = str(query_id)
         self.stream_name = _get_stream_name(query_id)
-        self._sync_redis: Any | None = None 
+        self._sync_redis: SyncRedis[str] | None = None
         logger.info(f"RedisEventPublisher created for stream: {self.stream_name}")
 
-    def _ensure_sync_connected(self) -> Any:
+    def _ensure_sync_connected(self) -> SyncRedis[str]:
         if self._sync_redis is None:
             logger.info(f"Connecting to Redis: {settings.redis_url}")
             self._sync_redis = sync_redis.from_url(
@@ -283,11 +284,11 @@ class EventEmitter:
         await self.emit(EventType.TOOL_CALL, tool=tool, args=args)
 
     async def search_complete(
-        self, 
-        sections_found: int, 
+        self,
+        sections_found: int,
         message: str = "",
         tool_name: str = "",
-        results: list | None = None,
+        results: list[dict[str, Any]] | None = None,
     ) -> None:
         await self.emit(
             EventType.SEARCH_COMPLETE,

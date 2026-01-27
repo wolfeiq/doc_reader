@@ -2,11 +2,11 @@
 
 import { Search, FileText, Lightbulb, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useQueryStore } from '@/stores';
+import { useStreamingProgress } from '@/stores';
 import { Card, Badge } from '../ui';
 
 export function StreamingProgress() {
-  const { streamingStatus, steps, incomingSuggestions, error, completionData } = useQueryStore();
+  const { status: streamingStatus, steps, suggestions: incomingSuggestions, error, completionData } = useStreamingProgress();
 
   if (streamingStatus === 'idle') return null;
 
@@ -74,8 +74,8 @@ export function StreamingProgress() {
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase">Found</p>
             <div className="space-y-1 max-h-40 overflow-y-auto">
-              {incomingSuggestions.map((s, i) => (
-                <div key={i} className="flex items-center gap-2 rounded-lg bg-muted/50 p-2 text-sm">
+              {incomingSuggestions.map((s) => (
+                <div key={s.suggestion_id} className="flex items-center gap-2 rounded-lg bg-muted/50 p-2 text-sm">
                   <Lightbulb className="h-4 w-4 text-yellow-500" />
                   <div className="flex-1 min-w-0">
                     <p className="truncate font-medium">{s.section_title || 'Untitled'}</p>

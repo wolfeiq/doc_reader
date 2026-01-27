@@ -69,7 +69,7 @@ async def update_suggestion(
     if update.edited_text is not None:
         suggestion.edited_text = update.edited_text
 
-    await db.commit()
+    await db.flush()
     await db.refresh(suggestion)
 
     return SuggestionResponse(
@@ -137,7 +137,6 @@ async def accept_suggestion(
         section_title=suggestion.section.section_title
     )
     db.add(history)
-    await db.commit()
 
     logger.info(f"Applied suggestion {suggestion_id}")
 
@@ -180,14 +179,13 @@ async def reject_suggestion(
         user_action=UserAction.REJECTED,
         query_text=suggestion.query.query_text if suggestion.query else None,
         file_path=(
-            suggestion.section.document.file_path 
-            if suggestion.section and suggestion.section.document 
+            suggestion.section.document.file_path
+            if suggestion.section and suggestion.section.document
             else None
         ),
         section_title=suggestion.section.section_title if suggestion.section else None
     )
     db.add(history)
-    await db.commit()
 
     logger.info(f"Rejected suggestion {suggestion_id}")
 

@@ -1,9 +1,55 @@
+"""
+Query Processing Celery Tasks
+=============================
+
+This module contains Celery tasks for asynchronous query processing.
+These tasks run in Celery workers, separate from the FastAPI web server.
+
+Why Background Processing?
+--------------------------
+AI query processing can take 30-60+ seconds due to:
+- Multiple OpenAI API calls (embeddings, chat completions)
+- Vector similarity searches
+- Database operations
+
+Running this synchronously would:
+- Block the HTTP request (poor UX)
+- Risk timeout errors
+- Prevent horizontal scaling
+
+How It Works:
+-------------
+1. API endpoint receives query, creates DB record, returns immediately
+2. API dispatches Celery task with query ID
+3. Celery worker picks up task and processes
+4. Worker publishes progress events to Redis
+5. Frontend subscribes to Redis events via SSE
+6. Worker saves results and marks query complete
+
+Error Handling:
+---------------
+The QueryProcessingTask base class handles failures:
+- Logs errors with context
+- Marks query as FAILED in database
+- Supports automatic retries (3 attempts)
+
+Production Considerations:
+--------------------------
+- Monitor task queue depth with Flower
+- Set up dead letter queue for permanent failures
+- Implement circuit breakers for OpenAI API
+- Add task prioritization (premium users first)
+- Consider task chaining for complex workflows
+- Add Prometheus metrics for task duration/success rate
+"""
+
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
+from billiard.einfo import ExceptionInfo
 
 from celery import Task
 from sqlalchemy import select
@@ -19,13 +65,20 @@ logger = logging.getLogger(__name__)
 
 
 class QueryProcessingTask(Task):
+    """
+    Custom Celery Task base class with failure handling.
+
+    Extends Celery's Task to automatically mark queries as FAILED
+    in the database when task execution fails. This ensures the
+    frontend always knows the query's true status.
+    """
     def on_failure(
         self,
         exc: Exception,
         task_id: str,
-        args: tuple,
-        kwargs: dict,
-        einfo: Any,
+        args: tuple[str, ...],
+        kwargs: dict[str, Any],
+        einfo: ExceptionInfo,
     ) -> None:
         logger.error(f"Query processing task {task_id} failed: {exc}")
         query_id = args[0] if args else kwargs.get("query_id")

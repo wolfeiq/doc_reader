@@ -13,7 +13,15 @@ from sqlalchemy.orm import selectinload
 
 from app.ai.prompts import SYSTEM_PROMPT
 from app.ai.tools import TOOLS
-from app.schemas.tool_schemas import validate_tool_args
+from app.schemas.tool_schemas import (
+    validate_tool_args,
+    SemanticSearchArgs,
+    GetSectionContentArgs,
+    FindDependenciesArgs,
+    ProposeEditArgs,
+    GetDocumentStructureArgs,
+    SearchByFilePathArgs,
+)
 from app.config import settings
 from app.models.document_base import Document
 from app.models.document import DocumentSection
@@ -23,7 +31,7 @@ from app.services.dependency_service import DependencyService
 from app.services.search_service import SearchService
 from app.services.event_service import EventEmitter
 from app.schemas.tool_schemas import AgentStats, ToolError, ToolResult, ProposeEditResult, SectionResult
-from app.schemas.tool_schemas import FilePathSearchResult, DocumentStructureResult, DocumentStructureSection, DependencyResult, SearchResult
+from app.schemas.tool_schemas import FilePathSearchResult, DocumentStructureResult, DocumentStructureSection, DependencyResult, SearchResult, DependencyInfo, SearchResultItem
 
 
 logger = logging.getLogger(__name__)
@@ -31,8 +39,9 @@ logger = logging.getLogger(__name__)
 MAX_ITERATIONS = 15
 DEFAULT_CONFIDENCE = 0.5
 
-MessageDict = dict[str, Any]
-ToolHandler = Callable[[dict[str, Any]], Awaitable[ToolResult]]
+MessageDict = dict[str, str | list[dict[str, Any]]]
+ToolArgs = SemanticSearchArgs | GetSectionContentArgs | FindDependenciesArgs | ProposeEditArgs | GetDocumentStructureArgs | SearchByFilePathArgs
+ToolHandler = Callable[[ToolArgs], Awaitable[ToolResult]]
 
 @dataclass
 class AgentState:
@@ -106,7 +115,7 @@ class ToolExecutor:
             return ToolError(error=f"Unknown tool: {tool_name}")
 
         try:
-            result = await handler(validated_args.model_dump())
+            result = await handler(validated_args)
             await self._emit_tool_events(tool_name, tool_args, result)
             return result
         except Exception as e:
@@ -135,10 +144,11 @@ class ToolExecutor:
                     preview=tool_args.get("suggested_text", "")[:200],
                 )
 
-    async def _handle_semantic_search(self, args: dict[str, Any]) -> SearchResult:
-        query: str = args["query"]
-        n_results: int = min(args.get("n_results", 10), 20)
-        file_filter: str | None = args.get("file_path_filter")
+    async def _handle_semantic_search(self, args: ToolArgs) -> SearchResult:
+        assert isinstance(args, SemanticSearchArgs)
+        query = args.query
+        n_results = min(args.n_results, 20)
+        file_filter = args.file_path_filter
 
         self.state.searched_queries.append(query)
 
@@ -148,17 +158,18 @@ class ToolExecutor:
             file_path_filter=file_filter,
         )
 
-        results = []
+        results: list[SearchResultItem] = []
         for r in raw_results:
             metadata = r.get("metadata", {})
-            results.append({
-                "section_id": r.get("section_id", ""),
-                "document_id": metadata.get("document_id"),
-                "section_title": metadata.get("section_title"),
-                "file_path": metadata.get("file_path"),
-                "content_preview": r.get("content", "")[:200] if r.get("content") else None,
-                "score": r.get("score", 0.0),
-            })
+            content = r.get("content")
+            results.append(SearchResultItem(
+                section_id=r.get("section_id", ""),
+                document_id=metadata.get("document_id"),
+                section_title=metadata.get("section_title"),
+                file_path=metadata.get("file_path"),
+                content_preview=content[:200] if content else None,
+                score=r.get("score", 0.0),
+            ))
 
         return SearchResult(
             results=results,
@@ -166,8 +177,9 @@ class ToolExecutor:
             query=query,
         )
 
-    async def _handle_get_section(self, args: dict[str, Any]) -> SectionResult:
-        section_id = self._to_uuid(args["section_id"])
+    async def _handle_get_section(self, args: ToolArgs) -> SectionResult:
+        assert isinstance(args, GetSectionContentArgs)
+        section_id = args.section_id
 
         result = await self.db.execute(
             select(DocumentSection)
@@ -189,31 +201,45 @@ class ToolExecutor:
             order=section.order,
         )
 
-    async def _handle_find_dependencies(self, args: dict[str, Any]) -> DependencyResult:
-        section_id = self._to_uuid(args["section_id"])
-        direction: str = args.get("direction", "both")
+    async def _handle_find_dependencies(self, args: ToolArgs) -> DependencyResult:
+        assert isinstance(args, FindDependenciesArgs)
+        section_id = args.section_id
+        direction = args.direction
 
         deps = await self.dependency_service.get_dependencies(
             section_id=section_id,
             direction=direction,
         )
 
-        all_deps = []
+        all_deps: list[DependencyInfo] = []
         if direction in ("incoming", "both"):
-            all_deps.extend(deps.get("incoming", []))
+            for d in deps.get("incoming", []):
+                all_deps.append(DependencyInfo(
+                    dependency_id=d["dependency_id"] or "",
+                    section_id=d["section_id"] or "",
+                    section_title=d.get("section_title"),
+                    dependency_type=d["dependency_type"] or "",
+                ))
         if direction in ("outgoing", "both"):
-            all_deps.extend(deps.get("outgoing", []))
+            for d in deps.get("outgoing", []):
+                all_deps.append(DependencyInfo(
+                    dependency_id=d["dependency_id"] or "",
+                    section_id=d["section_id"] or "",
+                    section_title=d.get("section_title"),
+                    dependency_type=d["dependency_type"] or "",
+                ))
 
         return DependencyResult(
             section_id=str(section_id),
             dependencies=all_deps,
         )
 
-    async def _handle_propose_edit(self, args: dict[str, Any]) -> ProposeEditResult:
-        section_id = self._to_uuid(args["section_id"])
-        suggested_text: str = args["suggested_text"]
-        reasoning: str = args["reasoning"]
-        confidence: float = max(0.0, min(1.0, args.get("confidence", DEFAULT_CONFIDENCE)))
+    async def _handle_propose_edit(self, args: ToolArgs) -> ProposeEditResult:
+        assert isinstance(args, ProposeEditArgs)
+        section_id = args.section_id
+        suggested_text = args.suggested_text
+        reasoning = args.reasoning
+        confidence = max(0.0, min(1.0, args.confidence))
 
         result = await self.db.execute(
             select(DocumentSection)
@@ -256,9 +282,10 @@ class ToolExecutor:
         return edit_info
 
     async def _handle_get_document_structure(
-        self, args: dict[str, Any]
+        self, args: ToolArgs
     ) -> DocumentStructureResult:
-        document_id = self._to_uuid(args["document_id"])
+        assert isinstance(args, GetDocumentStructureArgs)
+        document_id = args.document_id
 
         result = await self.db.execute(
             select(Document)
@@ -286,25 +313,27 @@ class ToolExecutor:
             sections=sections,
         )
 
-    async def _handle_search_by_file_path(self, args: dict[str, Any]) -> FilePathSearchResult:
-        path_pattern: str = args["path_pattern"]
+    async def _handle_search_by_file_path(self, args: ToolArgs) -> FilePathSearchResult:
+        assert isinstance(args, SearchByFilePathArgs)
+        path_pattern = args.path_pattern
 
         raw_results = await self.search_service.search_by_file_path(
             path_pattern=path_pattern,
             n_results=20,
         )
 
-        results = []
+        results: list[SearchResultItem] = []
         for r in raw_results:
             metadata = r.get("metadata", {})
-            results.append({
-                "section_id": r.get("section_id", ""),
-                "document_id": metadata.get("document_id"),
-                "section_title": metadata.get("section_title"),
-                "file_path": metadata.get("file_path"),
-                "content_preview": r.get("content", "")[:200] if r.get("content") else None,
-                "score": r.get("score", 0.0),
-            })
+            content = r.get("content")
+            results.append(SearchResultItem(
+                section_id=r.get("section_id", ""),
+                document_id=metadata.get("document_id"),
+                section_title=metadata.get("section_title"),
+                file_path=metadata.get("file_path"),
+                content_preview=content[:200] if content else None,
+                score=r.get("score", 0.0),
+            ))
 
         return FilePathSearchResult(
             results=results,

@@ -4,8 +4,11 @@ import { computeWordDiff } from '@/lib/utils';
 import type { ChangeType } from '@/types';
 import React, { useMemo } from 'react';
 
-
-export function DiffViewer({ original, modified, changeType }: { original: string, modified: string, changeType: ChangeType }) {
+/**
+ * SectionDiff - Word-level diff viewer for document sections
+ * Used in document detail page to show pending/accepted/rejected changes
+ */
+export function SectionDiff({ original, modified, changeType }: { original: string, modified: string, changeType: ChangeType }) {
   const diff = useMemo(() => computeWordDiff(original, modified), [original, modified]);
   const isRejected = changeType === 'rejected';
 

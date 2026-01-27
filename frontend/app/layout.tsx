@@ -1,3 +1,46 @@
+/**
+ * Root Layout - Application Shell
+ * ================================
+ *
+ * This is the root layout that wraps all pages in the Next.js App Router.
+ * It provides the consistent UI shell (sidebar, theme, global effects).
+ *
+ * Layout Structure:
+ * -----------------
+ * - html: Sets fonts and theme class
+ * - body: Background, text colors
+ *   - Providers: React Query, theme context
+ *     - GlobalFlashlight: Cursor-following light effect
+ *     - Mobile menu button: Hamburger for sidebar
+ *     - Sidebar: Navigation menu
+ *     - Main: Page content area
+ *
+ * Responsive Design:
+ * ------------------
+ * - Desktop (md+): Sidebar always visible, content offset
+ * - Mobile (<md): Sidebar hidden, toggle via hamburger button
+ *
+ * Font Strategy:
+ * --------------
+ * - Inter: Body text, UI elements
+ * - Libre Baskerville: Headings for visual contrast
+ * - CSS variables enable easy font switching
+ *
+ * Why 'use client' on Layout?
+ * ---------------------------
+ * The layout uses useState for sidebar toggle, requiring client component.
+ * This is a tradeoff - server components would be better for initial load,
+ * but mobile sidebar toggle needs client-side interactivity.
+ *
+ * Production Considerations:
+ * --------------------------
+ * - Add metadata export for SEO (title, description, og:image)
+ * - Consider server component with client wrapper for sidebar
+ * - Add error boundary for graceful error handling
+ * - Add analytics script (Google Analytics, Plausible)
+ * - Consider splash screen for initial load
+ */
+
 'use client';
 
 import { useState } from 'react';
@@ -7,8 +50,9 @@ import { Sidebar } from '@/components/layout';
 import GlobalFlashlight from '@/components/ui/GlobalFlashlight';
 import { cn } from '@/lib/utils';
 import { Inter, Libre_Baskerville } from 'next/font/google';
-import { Menu, X } from 'lucide-react'; 
+import { Menu, X } from 'lucide-react';
 
+// Font configuration - loaded from Google Fonts
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const libreBaskerville = Libre_Baskerville({
   weight: ['400', '700'],
@@ -16,6 +60,10 @@ const libreBaskerville = Libre_Baskerville({
   variable: '--font-libre',
 });
 
+/**
+ * Root layout component wrapping all pages.
+ * Provides navigation shell and global providers.
+ */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
