@@ -36,11 +36,11 @@ services:
     ports:
       - "8002:8000"
     volumes:
-      - chroma_data:/chroma/chroma/data
+      - chroma_data:/chroma/chroma  # Fixed: mount the actual chroma directory
     environment:
       - ANONYMIZED_TELEMETRY=False
       - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma/data
+      - PERSIST_DIRECTORY=/chroma/chroma
 
   backend:
     build:
@@ -48,7 +48,7 @@ services:
       dockerfile: Dockerfile
     container_name: pluno-backend
     ports:
-      - "8080:8080"
+      - "8081:8000"  # Changed: host 8081 -> container 8000 (standard port)
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/pluno
       - CHROMA_HOST=chromadb
@@ -68,7 +68,7 @@ services:
     volumes:
       - ./backend:/app
       - ./data:/app/data
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   celery-worker:
     build:

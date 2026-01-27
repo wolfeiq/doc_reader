@@ -30,9 +30,9 @@ Production Security:
 """
 
 from functools import lru_cache
-from typing import Literal, List
+from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, AnyHttpUrl, validator
+from pydantic import Field
 
 
 class Settings(BaseSettings):
@@ -50,6 +50,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,  # POSTGRES_USER == postgres_user
         extra="ignore",  # Ignore unknown env vars without error
+        populate_by_name=True,  # Allow both field name and alias
     )
 
     # -------------------------------------------------------------------------
@@ -62,8 +63,10 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # PostgreSQL Database Configuration
     # -------------------------------------------------------------------------
-    # Railway provides these automatically when you add a PostgreSQL plugin
-    # For local dev, these default to standard postgres settings
+    # Railway provides DATABASE_URL directly - use that if available
+    # Otherwise fall back to individual connection parameters
+    database_url_override: str | None = Field(None, alias="DATABASE_URL")
+
     postgres_user: str = "postgres"
     postgres_password: str = "postgres"
     postgres_server: str = "localhost"  # Railway: use internal hostname
@@ -73,19 +76,32 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         """
-        Construct async PostgreSQL connection URL.
-        Uses asyncpg driver for async SQLAlchemy support.
+        Get async PostgreSQL connection URL.
 
-        Production Note: Railway provides DATABASE_URL directly.
-        You could override this property to use that instead.
+        Priority:
+        1. DATABASE_URL env var (Railway standard)
+        2. Constructed from individual POSTGRES_* vars
+
+        Note: Railway's DATABASE_URL uses 'postgresql://' but we need
+        'postgresql+asyncpg://' for async SQLAlchemy.
         """
+        if self.database_url_override:
+            # Convert Railway's URL format to asyncpg
+            url = self.database_url_override
+            if url.startswith("postgres://"):
+                url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgresql://"):
+                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            return url
         return f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_server}:{self.postgres_port}/{self.postgres_db}"
 
     # -------------------------------------------------------------------------
     # Redis Configuration
     # -------------------------------------------------------------------------
     # Used for: Celery broker, result backend, and SSE event streaming
-    # Railway provides a Redis plugin that auto-injects REDIS_URL
+    # Railway provides REDIS_URL directly - use that if available
+    redis_url_override: str | None = Field(None, alias="REDIS_URL")
+
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
@@ -93,7 +109,15 @@ class Settings(BaseSettings):
 
     @property
     def redis_url(self) -> str:
-        """Construct Redis connection URL with optional authentication."""
+        """
+        Get Redis connection URL.
+
+        Priority:
+        1. REDIS_URL env var (Railway standard)
+        2. Constructed from individual REDIS_* vars
+        """
+        if self.redis_url_override:
+            return self.redis_url_override
         if self.redis_password:
             return f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}/{self.redis_db}"
         return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
@@ -122,22 +146,18 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     api_prefix: str = "/api"  # All routes prefixed with /api
 
-    # CORS origins - frontend URLs allowed to make requests
+    # CORS origins - frontend URLs allowed to make requests (comma-separated)
     # Production: Set to your Vercel deployment URL
     # Example: CORS_ORIGINS=https://myapp.vercel.app,https://www.myapp.com
-    cors_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    cors_origins_str: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000",
+        alias="CORS_ORIGINS"
+    )
 
-    @validator("cors_origins", pre=True)
-    def parse_cors_origins(cls, v: str | List[str]) -> List[str]:
-        """
-        Parse CORS origins from comma-separated string or list.
-        Allows setting CORS_ORIGINS="http://a.com,http://b.com" in env.
-        """
-        if isinstance(v, str) and not v.startswith("["):
-            return [origin.strip() for origin in v.split(",")]
-        elif isinstance(v, list):
-            return v
-        raise ValueError(v)
+    @property
+    def cors_origins(self) -> list[str]:
+        """Parse CORS origins from comma-separated string."""
+        return [origin.strip() for origin in self.cors_origins_str.split(",") if origin.strip()]
 
     # -------------------------------------------------------------------------
     # Celery Task Queue Configuration

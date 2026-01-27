@@ -266,6 +266,33 @@ class SearchService:
         self._collection.delete(ids=ids)
         return len(ids)
 
+    async def delete_by_document(self, document_id: str) -> int:
+        """
+        Delete all embeddings belonging to a specific document.
+
+        Args:
+            document_id: The document UUID to delete embeddings for
+
+        Returns:
+            Number of embeddings deleted
+        """
+        self._ensure_initialized()
+        if self._collection is None:
+            return 0
+
+        # Find all embeddings with this document_id in metadata
+        results = self._collection.get(
+            where={"document_id": {"$eq": document_id}},
+            include=[]
+        )
+
+        ids_to_delete = results.get("ids", [])
+        if ids_to_delete:
+            self._collection.delete(ids=ids_to_delete)
+            logger.info(f"Deleted {len(ids_to_delete)} embeddings for document {document_id}")
+
+        return len(ids_to_delete)
+
     async def initialize(self) -> None:
         self._ensure_initialized()
 

@@ -142,7 +142,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     args = parse_args()
-    base_path = args.path or Path("data/openai-agents-sdk")
+    base_path = args.path or Path("data/")
 
     if args.stats:
         asyncio.run(show_stats())
