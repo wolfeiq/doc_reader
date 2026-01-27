@@ -63,7 +63,7 @@ function buildQueryString(params: Record<string, string | number | undefined>): 
 export const queryApi = {
   list: (params?: { skip?: number; limit?: number; status?: string }) => {
     const query = buildQueryString(params || {});
-    return fetchApi<Query[]>(`/queries${query}`);
+    return fetchApi<Query[]>(`/queries/${query}`);
   },
 
   get: (id: string) => fetchApi<QueryDetail>(`/queries/${id}`),
@@ -114,7 +114,7 @@ export const suggestionApi = {
 export const documentApi = {
   list: (params?: { skip?: number; limit?: number }) => {
     const query = buildQueryString(params || {});
-    return fetchApi<DocumentListItem[]>(`/documents${query}`);
+    return fetchApi<DocumentListItem[]>(`/documents/${query}`);
   },
 
   get: (id: string) => fetchApi<DocumentType>(`/documents/${id}`),
@@ -133,7 +133,7 @@ export const historyApi = {
     action?: UserAction;
   }) => {
     const query = buildQueryString(params || {});
-    return fetchApi<EditHistory[]>(`/history${query}`);
+    return fetchApi<EditHistory[]>(`/history/${query}`);
   },
 };
 
