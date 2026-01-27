@@ -27,9 +27,7 @@ class ApiError extends Error {
 }
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE}${endpoint}`;
-  console.log('FETCHING URL:', url);
-  const response = await fetch(url, {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,

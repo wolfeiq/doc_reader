@@ -3,14 +3,8 @@
  * Next.js replaces NEXT_PUBLIC_* at build time, so we validate lazily
  */
 
-// API configuration - falls back to empty string for SSR/build, validated at runtime
+// API configuration - falls back to production URL for SSR/build
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://docreader-production-b979.up.railway.app/api';
-
-// Debug: log API_BASE on client-side
-if (typeof window !== 'undefined') {
-  console.log('API_BASE:', API_BASE);
-  console.log('NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
-}
 
 // Validate at runtime when actually making API calls (client-side only)
 export function validateEnv(): void {
