@@ -114,6 +114,15 @@ async def seed_database(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/debug-cors")
+async def debug_cors():
+    """Debug: show current CORS settings."""
+    from app.config import settings
+    return {
+        "cors_origins": settings.cors_origins,
+        "cors_origins_str": settings.cors_origins_str,
+    }
+
 @router.get("/stats")
 async def get_stats(
     secret: str = Query(..., description="Admin secret for authorization"),
