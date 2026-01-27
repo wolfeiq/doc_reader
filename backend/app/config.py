@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(..., description="OpenAI API key") 
     openai_model: str = "gpt-4o"
     openai_embedding_model: str = "text-embedding-3-small"
-
+    api_prefix: str = "/api"
 
     cors_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
