@@ -152,6 +152,142 @@ for tool_call in response.tool_calls:
 
 ---
 
+## Tool Design: Current Architecture & Trade-offs
+
+The AI agent has access to 6 tools. A key design decision is keeping `semantic_search` and `get_section_content` as separate tools rather than combining them.
+
+### Available Tools
+
+| Tool | Purpose | Returns |
+|------|---------|---------|
+| `semantic_search` | Find relevant sections by query | Section IDs, titles, 200-char previews, scores |
+| `get_section_content` | Read full content of a section | Complete section text |
+| `find_dependencies` | Find cross-references | Incoming/outgoing section links |
+| `propose_edit` | Create an edit suggestion | Suggestion ID, confirmation |
+| `get_document_structure` | List sections in a document | Section titles and order |
+| `search_by_file_path` | Find sections by file path | Sections matching path pattern |
+
+### Current Flow: Separate Tools
+
+```
+AI: semantic_search(query="authentication")
+    → Returns 10 results with 200-char previews (~2K tokens)
+
+AI: get_section_content(section_id="abc")   # Reads only sections it needs
+AI: get_section_content(section_id="def")
+AI: get_section_content(section_id="ghi")
+    → 3 full sections (~3K tokens)
+
+Total: ~5K tokens
+```
+
+### Alternative: Combined Tool
+
+```
+AI: semantic_search(query="authentication", include_full_content=true)
+    → Returns 10 results with FULL content (~10K+ tokens)
+
+Total: ~10K+ tokens (but fewer API round trips)
+```
+
+### Trade-off Analysis
+
+| Aspect | Separate Tools (Current) | Combined Tool |
+|--------|--------------------------|---------------|
+| **API Round Trips** | Multiple (1 search + N reads) | Single |
+| **Token Usage** | Lower (selective reading) | Higher (all content returned) |
+| **Latency** | Higher (multiple calls) | Lower (one call) |
+| **AI Control** | AI chooses what to read deeply | AI gets everything upfront |
+| **Cost** | Lower input tokens | Higher input tokens |
+| **Flexibility** | AI can skip irrelevant results | Must process all results |
+
+### Why We Chose Separate Tools
+
+1. **Token Efficiency**: Search often returns 10+ results, but AI typically only needs 2-3. Returning full content for all would waste tokens.
+
+2. **AI Autonomy**: AI can skim previews and decide which sections deserve deep reading. This mimics how humans work.
+
+3. **Iterative Refinement**: AI can search, read one section, realize it needs different results, and search again with refined query.
+
+### Potential Improvements
+
+| Option | Description | Trade-off |
+|--------|-------------|-----------|
+| **Longer Previews** | Increase preview from 200 to 1000 chars | More context without full content |
+| **Batch Read Tool** | `get_sections_batch(ids=["a","b","c"])` | One call for multiple sections |
+| **Optional Full Content** | `semantic_search(..., include_content=true)` | Flexibility when needed |
+| **Smart Caching** | Cache recently fetched sections | Reduce redundant reads |
+
+### Limitation: Content-Only Editing
+
+The current tools only support **content modification**, not **structural changes**. The AI can read document structure but cannot modify it.
+
+#### What Each Tool Can Do
+
+| Tool | Can Read | Can Modify |
+|------|----------|------------|
+| `semantic_search` | Section content, metadata | Nothing |
+| `get_section_content` | Full section text | Nothing |
+| `get_document_structure` | Section titles, order | Nothing |
+| `search_by_file_path` | Sections in file | Nothing |
+| `find_dependencies` | Cross-references | Nothing |
+| `propose_edit` | Section content | **Only text content** |
+
+#### What the AI Can vs Cannot Do
+
+| User Request | Supported? | Reason |
+|--------------|------------|--------|
+| "Update the authentication docs" | ✅ Yes | Edits content via `propose_edit` |
+| "Fix typos in section X" | ✅ Yes | Edits content |
+| "Reorder sections in agents.md" | ❌ No | No tool to change `order` field |
+| "Move section A before section B" | ❌ No | No tool to modify structure |
+| "Rename 'Setup' to 'Installation'" | ❌ No | No tool to change `section_title` |
+| "Delete the deprecated section" | ❌ No | No delete tool |
+| "Add a new FAQ section" | ❌ No | No create tool |
+| "Split this section into two" | ❌ No | No structural modification tools |
+
+#### Why This Limitation Exists
+
+The `propose_edit` tool schema only accepts content changes:
+
+```python
+"parameters": {
+    "properties": {
+        "section_id": {"type": "string"},
+        "suggested_text": {"type": "string"},  # ← Only content, not structure
+        "reasoning": {"type": "string"},
+        "confidence": {"type": "number"}
+    }
+}
+```
+
+Missing parameters that would enable structural edits:
+- `new_order` - Change section position
+- `new_title` - Rename section header
+- `move_to_document` - Move section to different file
+- `delete` - Remove section entirely
+- `create_after` - Insert new section
+
+#### Future: Structural Editing Tools
+
+To support structural changes, additional tools would be needed:
+
+```python
+# Reorder sections
+{"name": "reorder_sections", "parameters": {"document_id": "...", "section_order": ["id1", "id2", ...]}}
+
+# Rename section
+{"name": "rename_section", "parameters": {"section_id": "...", "new_title": "..."}}
+
+# Delete section
+{"name": "delete_section", "parameters": {"section_id": "...", "reasoning": "..."}}
+
+# Create section
+{"name": "create_section", "parameters": {"document_id": "...", "title": "...", "content": "...", "after_section_id": "..."}}
+```
+
+---
+
 ## Model Selection: GPT-4o and Beyond
 
 ### Why GPT-4o?
